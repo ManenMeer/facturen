@@ -740,7 +740,9 @@ function bindDrag(st,setPos){
 function loadScript(src){return new Promise(function(res,rej){var sc=document.createElement("script");sc.src=src;sc.onload=res;sc.onerror=function(){rej(new Error("kon "+src+" niet laden"))};document.head.appendChild(sc)})}
 async function msalInit(){
  try{
-  if(!window.msal)await loadScript("https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js");
+  if(!window.msal){var urls=["https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/dist/msal-browser.min.js","https://unpkg.com/@azure/msal-browser@2.38.3/dist/msal-browser.min.js","https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"],lastErr;
+   for(var u=0;u<urls.length&&!window.msal;u++){try{await loadScript(urls[u])}catch(e){lastErr=e}}
+   if(!window.msal)throw lastErr||new Error("msal niet geladen")}
   LIVE.msal=new window.msal.PublicClientApplication({auth:{clientId:CLIENT_ID,authority:"https://login.microsoftonline.com/"+TENANT_ID,redirectUri:REDIRECT,navigateToLoginRequestUrl:false},cache:{cacheLocation:"localStorage"}});
   if(LIVE.msal.initialize)await LIVE.msal.initialize();
   var r=await LIVE.msal.handleRedirectPromise();
