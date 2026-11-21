@@ -322,6 +322,48 @@ function destFolder(i){
  var pr=projByName(i.project);return pr?pr.folder:"";
 }
 var decided=function(i){return !!i.decided};
+var extraData={};
+function ccFor(i){var pr=projByName(i.project);return (i.ccSet?i.cc:(pr&&pr.cc))||""}
+function ccList(i){
+ var own=String((LIVE.acct&&LIVE.acct.username)||"").toLowerCase(),seen={},out=[];
+ (ccFor(i)+" "+(S.cc||"")).split(/[,;\s]+/).forEach(function(a){a=a.trim();if(!/@/.test(a))return;var k=a.toLowerCase();if(k===own||seen[k])return;seen[k]=1;out.push(a)});
+ return out;
+}
+function extraName(x){return x.name}
+function extraOk(i,x){return x.kind==="box"?!!pdfData[x.id]:!!extraData[x.key]}
+function unmerge(j){if(j.mergedInto){j.action=j.prevAction||"process";j.decided=!!j.prevDecided;delete j.mergedInto;delete j.prevAction;delete j.prevDecided}}
+function removeExtra(i,k){var x=i.extra[k];if(!x)return;if(x.kind==="box"){var j=S.invoices.filter(function(v){return v.id===x.id})[0];if(j)unmerge(j)}else delete extraData[x.key];i.extra.splice(k,1)}
+function addBoxExtra(i,idx){
+ var j=S.invoices[idx];if(!j||j===i||j.mergedInto)return;
+ j.prevAction=j.action;j.prevDecided=!!j.decided;j.mergedInto=i.id;j.action="keep";j.decided=true;j.stamp=null;
+ (i.extra=i.extra||[]).push({kind:"box",id:j.id,name:j.orig});
+}
+function addFileExtras(i,files){
+ Array.prototype.slice.call(files).forEach(function(f,n){
+  if(!(/\.(pdf|jpe?g|png)$/i.test(f.name)||/^(application\/pdf|image\/(jpeg|png))$/.test(f.type)))return;
+  var fr=new FileReader();fr.onload=function(){
+   var key="x"+Date.now()+"_"+n+"_"+Math.floor(Math.random()*1e6);
+   extraData[key]={bytes:new Uint8Array(fr.result),name:f.name,type:f.type};
+   (i.extra=i.extra||[]).push({kind:"file",key:key,name:f.name});save();render()};
+  fr.readAsArrayBuffer(f)});
+}
+async function appendExtras(doc,i,P){
+ var list=i.extra||[];
+ for(var k=0;k<list.length;k++){
+  var x=list[k],bytes,name=x.name,type="";
+  if(x.kind==="box"){bytes=pdfData[x.id]}else{var d=extraData[x.key];if(d){bytes=d.bytes;type=d.type}}
+  if(!bytes)throw new Error("bijlage '"+name+"' is niet meer beschikbaar: voeg hem opnieuw toe");
+  var isPdf=/\.pdf$/i.test(name)||type==="application/pdf";
+  if(isPdf){
+   var src=await P.PDFDocument.load(bytes,{ignoreEncryption:true});
+   var pgs=await doc.copyPages(src,src.getPageIndices());pgs.forEach(function(p){doc.addPage(p)});
+  }else{
+   var im=/\.png$/i.test(name)||type==="image/png"?await doc.embedPng(bytes):await doc.embedJpg(bytes);
+   var pw=595.28,ph=841.89,mg=28,sc=Math.min((pw-2*mg)/im.width,(ph-2*mg)/im.height,1),w=im.width*sc,h=im.height*sc;
+   var pg=doc.addPage([pw,ph]);pg.drawImage(im,{x:(pw-w)/2,y:(ph-h)/2,width:w,height:h});
+  }
+ }
+}
 var destOf=function(i){return i.action==="private"?"prive":i.action==="unknown"?"onbekend":i.action==="duplicate"?"dubbel":i.action==="keep"?"(blijft in box in)":i.project};
 
 /* ---------- echte pdf's (test) ---------- */
@@ -481,10 +523,15 @@ function vReview(){
   (noMail?'<div class="alert warn small" style="margin-bottom:8px">Voor dit project is nog geen e-mailadres ingevuld. <a href="#" data-act="go" data-v="admin">Invullen bij Beheer</a></div>':"")+
   '<label class="check" aria-disabled="'+(!canSend)+'"><input type="checkbox" data-f="adm"'+(i.adm&&canSend?" checked":"")+(canSend?"":" disabled")+'><span><b>Verwerk in administratie</b><span class="small muted" style="display:block">'+(pr&&pr.model?"Voorstel in kopie van het model, jij controleert.":"Bij dit project is nog geen model ingesteld.")+'</span></span></label>'+
   '<div class="field" style="margin-top:10px"><label for="f-note">Extra tekst op de factuur (mag leeg)</label><textarea class="inp" id="f-note" data-f="note" rows="2" placeholder="Bijvoorbeeld: akkoord t/m termijn 3">'+esc(i.note||"")+'</textarea><span class="small muted">Komt als kader op de factuur. Sleep het kader naar een goede plek.</span></div>'+
+  (i.real?'<div class="field" style="margin-top:10px"><label for="f-cc">Extra kopie (cc) bij deze mail</label><input class="inp" id="f-cc" data-f="cc" value="'+esc(ccFor(i))+'" placeholder="geen" autocapitalize="off" autocorrect="off"><span class="small muted">Meerdere adressen scheid je met een komma. Niet je eigen mailbox gebruiken: dan kan er een lus ontstaan.</span></div>'+
+   '<div class="field" style="margin-top:10px"><label>Extra stukken achter de factuur (urenstaat enz.)</label>'+
+   (i.extra||[]).map(function(x,k){return '<div class="row small" style="justify-content:space-between;gap:8px;margin:4px 0"><span style="overflow-wrap:anywhere">📎 '+esc(x.name)+(extraOk(i,x)?"":" (opnieuw toevoegen)")+'</span><button class="btn" data-act="rmextra" data-v="'+k+'" aria-label="Verwijderen">✕</button></div>'}).join("")+
+   (function(){var o=S.invoices.map(function(v,n){return (v===i||v.mergedInto||!v.live)?"":'<option value="'+n+'">'+esc(v.orig)+'</option>'}).join("");return o?'<select class="inp" data-f="addbox" style="margin-top:6px"><option value="">＋ Voeg een bestand uit box in toe…</option>'+o+'</select>':""})()+
+   '<input class="inp" type="file" data-f="addfile" accept="application/pdf,image/jpeg,image/png" multiple style="margin-top:6px"><span class="small muted">Of kies een pdf of foto van dit apparaat (bijvoorbeeld uit je mail of Bestanden). Ze komen na de factuur, als pagina 2 en verder.</span></div>':"")+
   (decided(i)?'<div class="alert info small">Goedgekeurd op '+esc(i.approvedOn)+'. Sleep de stempel op de factuur naar een betere plek als dat nodig is.</div><div class="row" style="margin-top:8px"><button class="btn" data-act="undo">Goedkeuring ongedaan maken</button></div>'
    :'<button class="btn ok" style="width:100%;font-size:18px" data-act="approve"'+(needProj?" disabled":"")+'>✓ Goedkeuren</button>')+
   '</div>':
-  '<div class="card">'+(decided(i)?'<div class="alert info small">Keuze vastgelegd: '+esc(destOf(i))+'</div><div class="row" style="margin-top:8px"><button class="btn" data-act="undo">Keuze wijzigen</button></div>':'<button class="btn primary" style="width:100%" data-act="approve">Keuze vastleggen</button>')+'</div>')+
+  '<div class="card">'+(decided(i)?'<div class="alert info small">'+(i.mergedInto?"Dit bestand wordt achter een andere factuur gevoegd.":"Keuze vastgelegd: "+esc(destOf(i)))+'</div><div class="row" style="margin-top:8px"><button class="btn" data-act="undo">Keuze wijzigen</button></div>':'<button class="btn primary" style="width:100%" data-act="approve">Keuze vastleggen</button>')+'</div>')+
  (decided(i)?"":'<div class="card"><button class="btn" style="width:100%" data-act="skip">Overslaan: laat deze factuur staan in box in</button></div>')+
  '<div class="nav"><button class="btn" data-act="prev"'+(S.cur===0?" disabled":"")+'>← Vorige</button><button class="btn primary" data-act="next">'+(S.cur===S.invoices.length-1?"Naar afronden →":"Volgende →")+'</button></div></div>';
  return '<div class="chips" aria-label="Facturen">'+chips+'</div>'+
@@ -494,11 +541,13 @@ function planRows(){
  return S.invoices.map(function(i){
   var pr=projByName(i.project),acts=[];
   if(!decided(i)){return {i:i,acts:[],pending:true}}
+  if(i.mergedInto){var host=S.invoices.filter(function(v){return v.id===i.mergedInto})[0];return {i:i,acts:["Wordt als extra pagina's achter "+(host?newName(host):"een andere factuur")+" gevoegd"+(LIVE.on&&!S.test?"; origineel gaat naar de map _samengevoegd":"; origineel blijft staan (testmodus)")]}}
   if(i.action==="keep")return {i:i,acts:["Blijft ongewijzigd in box in"]};
   acts.push("Hernoemen naar "+newName(i));
   if(i.action==="process")acts.push("Stempel op de pdf zetten ("+i.approvedOn+")");
+  if(i.action==="process"&&(i.extra||[]).length)acts.push("Achter de factuur voegen: "+i.extra.map(extraName).join(", "));
   var sendable=i.action==="process"&&i.send&&!i.own&&pr;
-  if(sendable){acts.push(pr.email?"Mail aan "+pr.email+(S.cc?" (cc "+S.cc+")":"")+" met de pdf als bijlage; kopie komt in Verzonden items":"__noMail")}
+  if(sendable){acts.push(pr.email?"Mail aan "+pr.email+(LIVE.on&&ccList(i).length?" (cc "+ccList(i).join(", ")+")":(!LIVE.on&&S.cc?" (cc "+S.cc+")":""))+" met de pdf als bijlage; kopie komt in Verzonden items":"__noMail")}
   if(!destFolder(i))acts.push("__noFolder");
   else acts.push(LIVE.on&&S.test?"Kopie naar "+S.boxin.split("/").pop()+"/_test uitgevoerd/"+clean(destOf(i))+" (testmodus)":"Verplaatsen naar "+destFolder(i));
   if(i.action!=="duplicate")acts.push(LIVE.on&&S.test?"Toevoegen aan facturen_database_TEST.csv":"Toevoegen aan facturen_database.csv");
@@ -543,6 +592,7 @@ function vAdmin(){
  var pr=S.projects.map(function(p,k){
   return '<div class="card"><div class="row" style="justify-content:space-between"><h3>'+esc(p.name)+'</h3><button class="btn danger" data-act="delproj" data-v="'+k+'" aria-label="Project verwijderen">Verwijderen</button></div>'+
   '<div class="field" style="margin-top:12px"><label for="p'+k+'e">E-mailadres administratie</label><input class="inp" id="p'+k+'e" data-p="'+k+'" data-pf="email" type="email" value="'+esc(p.email)+'" placeholder="nog niet ingevuld"></div>'+
+  '<div class="field"><label for="p'+k+'c">Standaard cc bij mail naar administratie (mag leeg)</label><input class="inp" id="p'+k+'c" data-p="'+k+'" data-pf="cc" value="'+esc(p.cc||"")+'" placeholder="geen" autocapitalize="off"></div>'+
   '<div class="field"><label for="p'+k+'f">Mapadres facturen</label><div class="pathrow"><input class="inp" id="p'+k+'f" data-p="'+k+'" data-pf="folder" value="'+esc(p.folder)+'" placeholder="nog niet ingevuld"><button class="btn" data-act="browse" data-v="'+k+':folder">Bladeren…</button></div></div>'+
   '<div class="field"><label for="p'+k+'m">Model (CAPEX)</label><div class="pathrow"><input class="inp" id="p'+k+'m" data-p="'+k+'" data-pf="model" value="'+esc(p.model)+'" placeholder="geen model"><button class="btn" data-act="browse" data-v="'+k+':model">Bladeren…</button></div></div></div>';
  }).join("");
@@ -641,6 +691,7 @@ document.addEventListener("click",function(e){
  else if(a==="next"){if(S.cur<S.invoices.length-1){S.cur++}else{S.step="finish"}save();render();window.scrollTo(0,0)}
  else if(a==="skip"){var i0=cur();i0.action="keep";i0.decided=true;i0.stamp=null;save();if(S.cur<S.invoices.length-1){S.cur++}else{S.step="finish"}save();render();window.scrollTo(0,0)}
  else if(a==="approve")approve();
+ else if(a==="rmextra"){removeExtra(cur(),+v);save();render()}
  else if(a==="undo"){var i=cur();i.decided=false;i.stamp=null;save();render()}
  else if(a==="run"){if(S.invoices.some(function(x){return x.live})&&LIVE.on){if(!S.test&&!confirm("Dit hernoemt en verplaatst echt bestanden en verstuurt echte mails. Doorgaan?"))return;liveRun()}else run()}
  else if(a==="login"){LIVE.msal&&LIVE.msal.loginRedirect({scopes:SCOPES})}
@@ -683,6 +734,9 @@ document.addEventListener("change",function(e){
  if(t.id==="pdfin"&&t.files&&t.files.length){addPdfs(t.files);t.value="";return}
  if(t.getAttribute&&t.getAttribute("data-g")==="test"){S.test=t.checked;save();render();return}
  var f=t.getAttribute&&t.getAttribute("data-f");
+ if(f==="cc"){var cc1=cur();cc1.cc=t.value;cc1.ccSet=true;save();return}
+ if(f==="addbox"){if(t.value!==""){addBoxExtra(cur(),+t.value);save();render()}return}
+ if(f==="addfile"){if(t.files&&t.files.length)addFileExtras(cur(),t.files);t.value="";return}
  if(f==="number"||f==="supplier"||f==="amount"){cur()[f]=t.value;save();return}
  if(f){
   var i=cur();
@@ -710,6 +764,7 @@ document.addEventListener("input",function(e){
  if(t.getAttribute&&t.getAttribute("data-g")==="boxin"){S.boxin=t.value;save();return}
  var f=t.getAttribute&&t.getAttribute("data-f");
  if(f==="note"){var ci=cur();ci.note=t.value;save();updNote(ci);return}
+ if(f==="cc"){var cc0=cur();cc0.cc=t.value;cc0.ccSet=true;save();return}
  if(f&&(f==="number"||f==="supplier"||f==="amount")){cur()[f]=t.value;save();render()}
 });
 function updNote(i){
@@ -876,7 +931,7 @@ async function appendDb(rows){
 function mkLive(id,f,x){
  x=x||{};
  var inv={id:id,itemId:f.id,live:true,orig:f.name,size:f.size,supplier:x.supplier||"",number:x.number||"",date:x.date||"",to:x.to||"",layout:"A",lines:[],real:true,
-  amount:x.amount!=null?x.amount:"",project:x.project||"",action:x.action||"process",own:!!x.own,
+  amount:x.amount!=null?x.amount:"",cc:"",ccSet:false,extra:[],project:x.project||"",action:x.action||"process",own:!!x.own,
   reason:x.reason||"Niet ingelezen door Claude: vul datum, nummer, leverancier en project zelf in.",conf:x.conf||"laag"};
  if(inv.action==="private")inv.project="prive";
  if(inv.action==="unknown")inv.project="onbekend";
@@ -957,16 +1012,17 @@ async function stampPdf(i){
   page.drawRectangle({x:nx,y:ny,width:nw,height:nh,color:white,opacity:0.7,borderColor:cyan,borderWidth:0.003*W,borderDashArray:[0.01*W,0.008*W]});
   lines.forEach(function(l,k){page.drawText(l,{x:nx+pd,y:ny+nh-pd-ns*0.95-k*lh,size:ns,font:nf,color:dark})});
  }
+ await appendExtras(doc,i,P);
  return await doc.save();
 }
 
 /* ---- mail ---- */
 function addrs(x){return String(x||"").split(/[,;\s]+/).filter(function(a){return /@/.test(a)}).map(function(a){return {emailAddress:{address:a}}})}
 function b64(u8){var s="",CH=0x8000;for(var k=0;k<u8.length;k+=CH)s+=String.fromCharCode.apply(null,u8.subarray(k,k+CH));return btoa(s)}
-async function sendMail(to,subject,body,fname,bytes){
+async function sendMail(to,subject,body,fname,bytes,cc){
  var msg={subject:subject,body:{contentType:"Text",content:body},toRecipients:addrs(to)};
  if(!msg.toRecipients.length)throw new Error("geen geldig mailadres bij het project");
- if(S.cc&&addrs(S.cc).length)msg.ccRecipients=addrs(S.cc);
+ if(cc&&cc.length)msg.ccRecipients=addrs(cc.join(" "));
  if(bytes.length<2500000){
   msg.attachments=[{"@odata.type":"#microsoft.graph.fileAttachment",name:fname,contentType:"application/pdf",contentBytes:b64(bytes)}];
   await gfetch("POST","/me/sendMail",{message:msg,saveToSentItems:true});return;
@@ -998,7 +1054,7 @@ async function liveRun(){
    var pr=projByName(i.project);
    if(p.acts.some(function(a){return /^Mail aan/.test(a)})){
     var m=mailFor(i);log("Mail versturen aan "+pr.email+"…");
-    await sendMail(pr.email,m.subject,m.body,name,bytes);mailSent=true;row.mail=pr.email;
+    await sendMail(pr.email,m.subject,m.body,name,bytes,ccList(i));mailSent=true;row.mail=pr.email;
    }
    if(S.test){log("Kopie naar de testmap…");await uploadTo(rp(tfolder+"/"+name),bytes,"application/pdf")}
    else{
@@ -1006,8 +1062,15 @@ async function liveRun(){
     log("Hernoemen en verplaatsen…");
     await gfetch("PATCH","/me/drive/items/"+i.itemId,{name:name,parentReference:{id:target.id},"@microsoft.graph.conflictBehavior":"rename"});
    }
-   row.dest=tfolder;row.adm=!!(i.adm&&i.action==="process"&&p.acts.some(function(a){return /^Noteren/.test(a)}));row.ok=true;row.status="gelukt";okSet[i.id]=1;
-   if(i.action!=="duplicate")dbRows.push([todayISO,i.orig,name,i.date,i.number,i.supplier,destOf(i),(S.test?"TEST via app; ":"via app; ")+"uit map box in"+(row.adm?"; administratie bijwerken: voorstel nodig":"")+(i.note?"; extra tekst op factuur: "+i.note:"")]);
+   var merged=(i.extra||[]).filter(function(x){return x.kind==="box"});
+   if(merged.length&&!S.test){
+    try{var mf=await ensureFolder(S.boxin+"/_samengevoegd");
+     for(var q=0;q<merged.length;q++){var mj=S.invoices.filter(function(v){return v.id===merged[q].id})[0];if(!mj)continue;
+      await gfetch("PATCH","/me/drive/items/"+mj.itemId,{parentReference:{id:mf.id},"@microsoft.graph.conflictBehavior":"rename"});okSet[mj.id]=1}
+    }catch(e2){row.status="gelukt, maar origineel van bijlage niet verplaatst: "+e2.message}
+   }
+   row.dest=tfolder;row.adm=!!(i.adm&&i.action==="process"&&p.acts.some(function(a){return /^Noteren/.test(a)}));row.ok=true;if(!row.status)row.status="gelukt";okSet[i.id]=1;
+   if(i.action!=="duplicate")dbRows.push([todayISO,i.orig,name,i.date,i.number,i.supplier,destOf(i),(S.test?"TEST via app; ":"via app; ")+"uit map box in"+(row.adm?"; administratie bijwerken: voorstel nodig":"")+(i.note?"; extra tekst op factuur: "+i.note:"")+((i.extra||[]).length?"; achter factuur gevoegd: "+i.extra.map(extraName).join(" + "):"")]);
   }catch(e){
    row.status=mailSent?"Mail is verstuurd, maar bestand niet verplaatst: "+e.message:"MISLUKT, niet verwerkt: "+e.message;
   }
