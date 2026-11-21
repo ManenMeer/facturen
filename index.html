@@ -1,0 +1,1024 @@
+<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Facturen afhandelen</title>
+<style>
+/* Indeling: bovenbalk met 4 stappen; in "Beoordelen" links de factuur, rechts de zijbalk (onder elkaar op de iPad rechtop). */
+:root{
+  --bg:#f3f6f8; --panel:#ffffff; --ink:#14232b; --muted:#5d6f78; --line:#d6dee3;
+  --cyan:#0098c9; --cyan-ink:#006d93; --cyan-soft:#e3f3f9; --orange:#d9532a; --orange-soft:#fdece6;
+  --ok:#1f8a4c; --ok-soft:#e4f4ea; --warn:#a86a00; --warn-soft:#fff2d6; --bad:#c0302a; --bad-soft:#fde9e7;
+  --desk:#dfe6ea;
+  --font:Calibri,Carlito,"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1a20; --panel:#17252d; --ink:#e7eef2; --muted:#93a6b0; --line:#2b3d47;
+  --cyan:#3db8e3; --cyan-ink:#7fd3f0; --cyan-soft:#12313e; --orange:#ff8a62; --orange-soft:#3a2119;
+  --ok:#52c283; --ok-soft:#14301f; --warn:#f0b64a; --warn-soft:#38290b; --bad:#ff7a72; --bad-soft:#3c1b19;
+  --desk:#0b1419; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0f1a20; --panel:#17252d; --ink:#e7eef2; --muted:#93a6b0; --line:#2b3d47;
+  --cyan:#3db8e3; --cyan-ink:#7fd3f0; --cyan-soft:#12313e; --orange:#ff8a62; --orange-soft:#3a2119;
+  --ok:#52c283; --ok-soft:#14301f; --warn:#f0b64a; --warn-soft:#38290b; --bad:#ff7a72; --bad-soft:#3c1b19;
+  --desk:#0b1419; color-scheme:dark;}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 40px}
+button,input,select{font:inherit;color:inherit}
+h1,h2,h3{margin:0;line-height:1.2}
+.sim{background:var(--orange-soft);color:var(--orange);border:1px solid var(--orange);border-radius:8px;padding:8px 12px;font-weight:600;font-size:14px;margin-top:12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;padding:14px 0 10px}
+.brand{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.brand span{color:var(--cyan)}
+.steps{display:flex;gap:6px;flex-wrap:wrap}
+.step{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:9px 16px;min-height:44px;cursor:pointer;font-weight:600;color:var(--muted)}
+.step[aria-current="true"]{background:var(--cyan);border-color:var(--cyan);color:#fff}
+.step small{font-weight:400;opacity:.8;margin-left:4px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
+.stack{display:grid;gap:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:10px 16px;min-height:44px;font-weight:600;cursor:pointer}
+.btn:hover{border-color:var(--cyan)}
+.btn.primary{background:var(--cyan);border-color:var(--cyan);color:#fff}
+.btn.primary:hover{background:var(--cyan-ink)}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+.field{display:grid;gap:4px;margin-bottom:10px}
+.field label,.lbl{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.inp{width:100%;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px 12px;min-height:44px}
+.inp:focus{border-color:var(--cyan)}
+.tag{display:inline-block;border-radius:999px;padding:2px 10px;font-size:13px;font-weight:700}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.tag.bad{background:var(--bad-soft);color:var(--bad)}
+.tag.gray{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.tag.cy{background:var(--cyan-soft);color:var(--cyan-ink)}
+/* Start */
+.hero{display:grid;gap:16px;padding:8px 0}
+.hero h1{font-size:30px;letter-spacing:-.02em}
+.big{font-size:18px}
+.list{display:grid;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.li{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) auto;gap:12px;padding:10px 14px;border-top:1px solid var(--line);align-items:center;background:var(--panel)}
+.li:first-child{border-top:0}
+.li .a{color:var(--muted);text-decoration:line-through;overflow-wrap:anywhere;font-size:14px}
+.li .b{font-weight:600;overflow-wrap:anywhere}
+@media (max-width:640px){.li{grid-template-columns:1fr}}
+/* Beoordelen */
+.chips{display:flex;gap:6px;overflow-x:auto;padding:4px 0 10px}
+.chip{min-width:44px;height:44px;border-radius:10px;border:2px solid var(--line);background:var(--panel);font-weight:700;cursor:pointer;flex:0 0 auto}
+.chip.done{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.chip.dup{border-color:var(--bad);color:var(--bad)}
+.chip[aria-current="true"]{background:var(--cyan);border-color:var(--cyan);color:#fff}
+.review{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+@media (max-width:900px){.review{grid-template-columns:minmax(0,1fr)}}
+.desk{background:var(--desk);border-radius:12px;padding:16px;display:flex;justify-content:center}
+.pagewrap{width:100%;max-width:640px}
+.paper{position:relative;width:100%;aspect-ratio:210/297;background:#fff;color:#1b1b1b;container-type:inline-size;box-shadow:0 2px 14px rgba(0,0,0,.25);overflow:hidden;font-family:Arial,Helvetica,sans-serif;user-select:none;-webkit-user-select:none}
+.paper .blk{position:absolute;overflow:hidden}
+.paper .lh{font-size:3.6cqw;font-weight:700;line-height:1.15}
+.paper .t{font-size:2.5cqw;line-height:1.35}
+.paper .tb{font-size:2.5cqw;font-weight:700}
+.paper .band{background:#26323a;color:#fff;display:flex;align-items:center;padding:0 4cqw}
+.paper table{width:100%;border-collapse:collapse;font-size:2.4cqw}
+.paper td{padding:1cqw 0;border-bottom:.2cqw solid #ccc;vertical-align:top}
+.paper td:last-child{text-align:right;white-space:nowrap;padding-left:2cqw}
+.paper .scan{filter:blur(.25cqw);opacity:.85}
+.stamp{position:absolute;touch-action:none;cursor:grab;width:30%;user-select:none;-webkit-user-select:none}
+.stamp:active{cursor:grabbing}
+.stamp.drag{outline:2px dashed #d9532a;outline-offset:3px}
+.note{position:absolute;touch-action:none;cursor:grab;width:42%;user-select:none;-webkit-user-select:none;background:rgba(255,255,255,.7);border:.3cqw dashed #0098c9;border-radius:.8cqw;padding:.9cqw 1.4cqw;font:2.4cqw/1.3 Arial,sans-serif;color:#14232b;white-space:pre-wrap;overflow-wrap:anywhere}
+.note.drag{outline:2px dashed #d9532a;outline-offset:3px}
+.stamp img{width:100%;display:block;pointer-events:none}
+.stampdef{aspect-ratio:1/.43;display:flex;flex-direction:column;justify-content:center;border:.5cqw solid #0098c9;color:#0098c9;border-radius:1.2cqw;padding:1.1cqw 1.6cqw;text-align:center;font-family:Arial,sans-serif;background:rgba(255,255,255,.55)}
+.stampdef b{display:block;font-size:3cqw;letter-spacing:.12em}
+.stampdef span{display:block;font-size:2.3cqw;line-height:1.3;color:#14232b}
+.side{display:grid;gap:12px;position:sticky;top:8px}
+@media (max-width:900px){.side{position:static}}
+.side .card{padding:16px}
+.alert{border-radius:10px;padding:12px 14px;font-weight:600}
+.alert.bad{background:var(--bad-soft);color:var(--bad);border:2px solid var(--bad);font-size:17px}
+.alert.warn{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)}
+.alert.info{background:var(--cyan-soft);color:var(--cyan-ink);border:1px solid var(--cyan)}
+.check{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;margin-bottom:8px;min-height:48px}
+.check input{width:24px;height:24px;margin:0;flex:0 0 auto;accent-color:var(--cyan)}
+.check[aria-disabled="true"]{opacity:.5;cursor:not-allowed}
+.nav{display:flex;justify-content:space-between;gap:10px;margin-top:4px}
+/* Afronden */
+table.tbl{width:100%;border-collapse:collapse}
+.tblwrap{overflow-x:auto}
+.tbl th{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:2px solid var(--line)}
+.tbl td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top;font-size:15px}
+.tbl td .sub{display:block;color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.log{margin:0;padding:0;list-style:none;display:grid;gap:4px;font-size:15px;max-height:340px;overflow:auto}
+.log li{padding:6px 10px;border-radius:8px;background:var(--bg)}
+.log li.done{background:var(--ok-soft);color:var(--ok)}
+.prog{height:10px;background:var(--line);border-radius:999px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--cyan);width:0;transition:width .25s}
+/* Beheer */
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:grid;place-items:center;padding:16px;z-index:20}
+.modal .card{width:100%;max-width:480px;max-height:90vh;overflow:auto}
+.sr{position:absolute;left:-9999px}
+.pathrow{display:flex;gap:8px}.pathrow .inp{flex:1;min-width:0}
+.crumbs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:14px;margin-bottom:8px}
+.crumbs button{border:0;background:var(--cyan-soft);color:var(--cyan-ink);border-radius:6px;padding:6px 10px;min-height:36px;cursor:pointer;font-weight:600}
+.bl{display:grid;border:1px solid var(--line);border-radius:10px;overflow:hidden;max-height:46vh;overflow-y:auto}
+.bl button{display:flex;gap:10px;align-items:center;text-align:left;border:0;border-top:1px solid var(--line);background:var(--panel);padding:10px 14px;min-height:48px;cursor:pointer}
+.bl button:first-child{border-top:0}.bl button:hover{background:var(--cyan-soft)}
+.bl .empty{padding:14px;color:var(--muted)}
+</style></head><body><div id="app"></div>
+<script>
+(function(){
+"use strict";
+/* ---------- hulpfuncties ---------- */
+var esc=function(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})};
+var eur=function(n){return new Intl.NumberFormat("nl-NL",{style:"currency",currency:"EUR"}).format(n)};
+var pad=function(n){return String(n).padStart(2,"0")};
+var now=new Date();
+var todayISO=now.getFullYear()+"-"+pad(now.getMonth()+1)+"-"+pad(now.getDate());
+var todayDMY=pad(now.getDate())+"-"+pad(now.getMonth()+1)+"-"+String(now.getFullYear()).slice(2);
+var yymmdd=function(iso){return iso?iso.slice(2,4)+iso.slice(5,7)+iso.slice(8,10):""};
+var clean=function(s){return String(s||"").replace(/[\\\/:*?"<>|]/g,"-").replace(/\s+/g," ").trim()};
+var MAILBOX="d.visser@manenmeer.nl";
+var CLIENT_ID="a8a05d8e-da1c-46e1-b664-bf0687ee5e7d",TENANT_ID="8ddc5a0a-76ce-4a00-8a07-4b2c87e0a1c4";
+var REDIRECT="https://manenmeer.github.io/facturen/";
+var SCOPES=["User.Read","Files.ReadWrite","Mail.Send"];
+var ROOTAF="Man&Meer/Documenten/Man&meer facturen/af te handelen facturen";
+var DBDIR=ROOTAF+"/dbase facturen";
+var DEF_BOXIN=ROOTAF+"/box in test";
+var LIVE={on:false,ready:false,acct:null,msal:null,setLoaded:false,sig:"",msg:"",err:"",busy:false};
+
+/* ---------- demodata ---------- */
+var DEF_PROJECTS=[
+ {name:"Dordrecht - Drievriendenhof",email:"dvisser@sbrealestate.nl",folder:"projecten/Dordrecht/06. Bewaking/6.1 Financieel/6.1.4 Facturen",model:"projecten/Dordrecht/06. Bewaking/6.1 Financieel/6.1.6. Dashboard/261117_NW_CAPEX_Dordrecht_Drievriendenhof.xlsm"},
+ {name:"Maastricht - Wolfstraat",email:"dvisser@sbrealestate.nl",folder:"projecten/Maastricht Wolfstraat/06. Bewaking/6.1 Financieel/6.1.4 Facturen",model:"projecten/Maastricht Wolfstraat/06. Bewaking/6.1 Financieel/6.1.7 Dashboard/261117_CAPEX_Maastricht_Wolfstraat.xlsm"},
+ {name:"Rijswijk - De Bogaard",email:"",folder:"",model:""},
+ {name:"Enschede - De Klanderij",email:"",folder:"",model:""},
+ {name:"Veenendaal - Passage Corridor",email:"",folder:"",model:""},
+ {name:"Amsterdam - Amsterdamse Poort",email:"",folder:"",model:""}
+];
+var SPECIAL=[
+ {name:"Man&Meer algemeen",special:true,note:"Geen administratie; map onder 'af te handelen facturen'"},
+ {name:"onbekend",special:true,note:"Project of leverancier niet vastgesteld"},
+ {name:"prive",special:true,note:"Privé, buiten de administratie"}
+];
+var DEF_DB=[
+ ["2026-11-09","V2601505","Pyrock","Dordrecht - Drievriendenhof","261106 V2601505 Pyrock.pdf"],
+ ["2026-11-10","20260174","Barten","Dordrecht - Drievriendenhof","261110 20260174 Barten.pdf"],
+ ["2026-11-10","202610926","Warmtebouw","Dordrecht - Drievriendenhof","261110 202610926 Warmtebouw.pdf"],
+ ["2026-11-17","26014","De Jong Installatiemanagement","Dordrecht - Drievriendenhof","260930 26014 De Jong Installatiemanagement.pdf"],
+ ["2026-11-09","261111","Ingenieursburo van der Werf en Lankhorst","Maastricht - Wolfstraat","261109 261111 Van der Werf en Lankhorst.pdf"],
+ ["2026-11-17","26-0263","Man&Meer","Veenendaal - Passage Corridor","261117 26-0263 Man&Meer Veenendaal.pdf"]
+].map(function(r){return {date:r[0],number:r[1],supplier:r[2],dest:r[3],file:r[4]}});
+
+/* paginaindelingen: blokken in % van breedte (x,w) en hoogte (y,h) */
+var LAYOUTS={
+ A:{head:{x:6,y:4,w:42,h:9},meta:{x:60,y:5,w:34,h:13},addr:{x:6,y:22,w:40,h:10},table:{x:6,y:40,w:88}},
+ B:{head:{x:0,y:0,w:100,h:11},meta:{x:6,y:14,w:44,h:13},addr:{x:6,y:29,w:40,h:10},table:{x:6,y:44,w:88}},
+ C:{head:{x:52,y:4,w:42,h:9},meta:{x:6,y:5,w:36,h:13},addr:{x:6,y:22,w:40,h:10},table:{x:6,y:40,w:88}}
+};
+function demoInvoices(){
+ var L=function(a,b){return [a,b]};
+ return [
+ {id:1,orig:"Verkoopfactuur VF263012.pdf",supplier:"WL Techniek",number:"VF263012",date:"2026-11-18",to:"DOM Vastgoed BV",layout:"A",
+  lines:[L("30% bij voortgang - E installaties, PR2600464",14850)],project:"Dordrecht - Drievriendenhof",action:"process",send:true,adm:true,
+  reason:"Leverancier staat al in Dordrecht - Drievriendenhof; tenaamstelling DOM Vastgoed.",conf:"hoog"},
+ {id:2,orig:"BD Factuur Termijn met AS 20260184 DOM Vastgoed BV.pdf",supplier:"Barten",number:"20260184",date:"2026-11-19",to:"DOM Vastgoed BV",layout:"B",
+  lines:[L("7e termijn aanneemsom, werkorder 262825-002",48500)],project:"Dordrecht - Drievriendenhof",action:"process",send:true,adm:true,
+  reason:"Zelfde werkorder als eerdere Barten-termijnen.",conf:"hoog"},
+ {id:3,orig:"inv260024101.pdf",supplier:"Faringwell",number:"260024101",date:"2026-11-20",to:"Man & Meer",layout:"C",
+  lines:[L("Alarm/trackingabonnement BMW X5, november",17.5)],project:"Man&Meer algemeen",action:"process",send:false,adm:false,
+  reason:"Abonnement voor Man&Meer zelf, geen projectkosten.",conf:"hoog"},
+ {id:4,orig:"Factuur 4600028600021455.pdf",supplier:"Nationale-Nederlanden",number:"4600028600021455",date:"2026-11-18",to:"Man & Meer",layout:"A",
+  lines:[L("Aanhangwagenverzekering polis 46103572",11.47)],project:"Man&Meer algemeen",action:"process",send:false,adm:false,
+  reason:"Verzekering van Man&Meer.",conf:"hoog"},
+ {id:5,orig:"WKC Drievriendenhof Dordrecht-Man en Meer (V2601505).pdf",supplier:"Pyrock",number:"V2601505",date:"2026-11-06",to:"Man & Meer",layout:"B",
+  lines:[L("2e termijn 65% na rato werkzaamheden, ref. 626-E4762",22977.5)],project:"Dordrecht - Drievriendenhof",action:"duplicate",send:false,adm:false,
+  reason:"Factuurnummer en leverancier staan al in de database.",conf:"hoog"},
+ {id:6,orig:"factuur 261127 2414 wolfstraat 20261119.pdf",supplier:"Ingenieursburo van der Werf en Lankhorst",number:"261127",date:"2026-11-19",to:"Wolfstraat Vastgoed bv",layout:"C",
+  lines:[L("Constructieadvies november 2026, werknr 2414",1850)],project:"Maastricht - Wolfstraat",action:"process",send:true,adm:true,
+  reason:"Werknr 2414 hoort bij Wolfstraat.",conf:"hoog"},
+ {id:7,orig:"Factuur 26-0267 van Man&Meer.pdf",supplier:"Man&Meer",number:"26-0267",date:"2026-11-20",to:"SB Rijswijk B.V.",layout:"A",
+  lines:[L("Projectmanagement november 2026, De Bogaard",2640)],project:"Rijswijk - De Bogaard",action:"process",send:false,adm:false,own:true,
+  reason:"Eigen verkoopfactuur van Man&Meer: niet doorsturen, wel in de projectmap.",conf:"hoog"},
+ {id:8,orig:"Projectfactuur 202611301.pdf",supplier:"Warmtebouw",number:"202611301",date:"2026-11-19",to:"DOM Vastgoed BV",layout:"A",
+  lines:[L("2e termijn 20% aanpassing loodgietersinstallaties",13438.27)],project:"Dordrecht - Drievriendenhof",action:"process",send:true,adm:true,
+  reason:"Herkend aan KVK 30045710, eerder factuur voor Drievriendenhof.",conf:"midden"},
+ {id:9,orig:"scan0042.pdf",supplier:"",number:"",date:"",to:"",layout:"C",scan:true,
+  lines:[L("(gescand, onleesbaar)",0)],project:"",action:"unknown",send:false,adm:false,
+  reason:"Leverancier en nummer niet te lezen. Niet gokken: kies zelf een project of laat hem in 'onbekend'.",conf:"laag"},
+ {id:10,orig:"Hedin factuur.pdf",supplier:"Hedin Automotive",number:"H-883412",date:"2026-11-12",to:"D. Visser",layout:"B",
+  lines:[L("Onderhoudsbeurt MINI, Breda",486.2)],project:"prive",action:"private",send:false,adm:false,
+  reason:"Gericht aan David persoonlijk (MINI): privé, buiten de administratie.",conf:"hoog"}
+ ];
+}
+
+/* ---------- toestand ---------- */
+var S;
+var BASE=ROOTAF+"/";
+function defSpecial(){return {"Man&Meer algemeen":BASE+"Man&Meer algemeen","prive":BASE+"prive","onbekend":BASE+"onbekend","dubbel":BASE+"dubbel"}}
+function defMail(){return {subject:"Factuur {leverancier} {nummer} - {project}",body:"Beste administratie,\n\nHierbij ter verwerking een goedgekeurde factuur voor het project {project}.\n\nLeverancier: {leverancier}\nFactuurnummer: {nummer}\nFactuurdatum: {datum}\nBedrag: {bedrag} excl. btw\nGoedgekeurd door David Visser op {goedgekeurd}\n\nDe factuur zit als pdf bijgevoegd.\n\nMet vriendelijke groet,\n\nir. D.T.A. (David) Visser\nMan&Meer"}}
+function fresh(){return {stampRatio:0.43,mail:defMail(),special:defSpecial(),step:"start",scanned:false,cur:0,invoices:[],projects:JSON.parse(JSON.stringify(DEF_PROJECTS)),db:JSON.parse(JSON.stringify(DEF_DB)),stampImg:"",cc:"",test:true,boxin:DEF_BOXIN,done:false,result:null}}
+function load(){try{var r=localStorage.getItem("fa-state-v2");if(r){var o=JSON.parse(r);if(o&&o.projects){if(!o.special)o.special=defSpecial();if(!o.mail)o.mail=defMail();if(!o.stampRatio)o.stampRatio=0.43;if(o.cc===MAILBOX)o.cc="";if(o.test===undefined)o.test=true;if(!o.boxin)o.boxin=DEF_BOXIN;var n0=(o.invoices||[]).length;o.invoices=(o.invoices||[]).filter(function(x){return !x.real});if(n0&&!o.invoices.length){o.scanned=false;o.step="start";o.cur=0}return o}}}catch(e){}return fresh()}
+function save(){try{localStorage.setItem("fa-state-v2",JSON.stringify(S))}catch(e){}syncCheck()}
+/* ---- bewaren van beheer-instellingen voor al je apparaten (db) ---- */
+var dbc=null,dbLoaded=false,syncState="local",sigMain="",sigStamp="",wq=null,writing=false;
+function settingsObj(){return {projects:S.projects,special:S.special,mail:S.mail,cc:S.cc}}
+function stampObj(){return {img:S.stampImg||"",ratio:S.stampRatio||0.43}}
+function liveSettings(){return {projects:S.projects,special:S.special,mail:S.mail,cc:S.cc,test:S.test,boxin:S.boxin,stampImg:S.stampImg||"",stampRatio:S.stampRatio||0.43}}
+function syncCheck(){
+ if(LIVE.on&&LIVE.setLoaded){if(JSON.stringify(liveSettings())!==LIVE.sig){clearTimeout(wq);wq=setTimeout(flush,900)}return}
+ if(!dbc||!dbLoaded)return;
+ if(JSON.stringify(settingsObj())!==sigMain||JSON.stringify(stampObj())!==sigStamp){clearTimeout(wq);wq=setTimeout(flush,700)}
+}
+async function flush(){
+ if(writing){wq=setTimeout(flush,400);return}
+ writing=true;
+ if(LIVE.on&&LIVE.setLoaded){try{var jj=JSON.stringify(liveSettings());if(jj!==LIVE.sig){await putText(DBDIR+"/app_instellingen.json",jj);LIVE.sig=jj}syncState="ok"}catch(e){syncState="err"}writing=false;updSync();return}
+ try{
+  var m=JSON.stringify(settingsObj()),st=JSON.stringify(stampObj());
+  if(m!==sigMain){await dbc.doc("settings/main").set(JSON.parse(m));sigMain=m}
+  if(st!==sigStamp){await dbc.doc("settings/stamp").set(JSON.parse(st));sigStamp=st}
+  syncState="ok"
+ }catch(e){syncState="err"}
+ writing=false;updSync();
+}
+function updSync(){var el=document.getElementById("syncst");if(el)el.innerHTML=syncHtml()}
+function syncHtml(){return syncState==="ok"?'<span class="tag ok">'+(LIVE.on?'Bewaard in je OneDrive':'Bewaard voor al je apparaten')+'</span>':syncState==="err"?'<span class="tag bad">Opslaan mislukt, alleen in deze browser</span>':syncState==="load"?'<span class="tag gray">Instellingen ophalen…</span>':'<span class="tag warn">Alleen in deze browser bewaard</span>'}
+async function initDb(){
+ try{
+  syncState="load";
+  var c=window.claude&&window.claude.use?await window.claude.use("db"):null;
+  if(!c){syncState="local";updSync();return}
+  var t=setTimeout(function(){if(!dbLoaded){syncState="local";updSync()}},10000);
+  var a=await c.doc("settings/main").get(),b=await c.doc("settings/stamp").get();
+  clearTimeout(t);
+  if(a.exists){var d=a.data();if(d.projects)S.projects=d.projects;if(d.special)S.special=d.special;if(d.mail)S.mail=d.mail;if(typeof d.cc==="string")S.cc=(d.cc===MAILBOX?"":d.cc);sigMain=JSON.stringify(settingsObj())}
+  if(b.exists){var e=b.data();S.stampImg=e.img||"";S.stampRatio=e.ratio||0.43;sigStamp=JSON.stringify(stampObj())}
+  dbc=c;dbLoaded=true;syncState="ok";
+  try{localStorage.setItem("fa-state-v2",JSON.stringify(S))}catch(x){}
+  if(S.step==="admin"||S.step==="finish"){var ae=document.activeElement;if(!ae||ae===document.body)render()}else updSync();
+  syncCheck();
+ }catch(err){syncState="local";updSync()}
+}
+S=load();
+var browse=null;
+function dirName(p){var pl=p.name.split(" - ")[0];return p.name.indexOf("Maastricht")===0?"Maastricht Wolfstraat":pl}
+function treeFor(path){
+ /* voorbeeldstructuur van OneDrive; live komt dit uit je echte OneDrive */
+ var parts=path?path.split("/"):[],out={dirs:[],files:[]};
+ var fin="06. Bewaking/6.1 Financieel";
+ if(parts.length===0){out.dirs=["projecten","Man&meer facturen"];return out}
+ if(parts[0]==="Man&meer facturen"){
+  if(parts.length===1)out.dirs=["af te handelen facturen"];
+  else if(parts.length===2)out.dirs=["box in","dbase facturen","oud","dubbel","onbekend","prive","Man&Meer algemeen"].concat(S.projects.map(function(p){return p.name}));
+  return out}
+ if(parts[0]!=="projecten")return out;
+ if(parts.length===1){out.dirs=S.projects.map(dirName).filter(function(v,k,a){return a.indexOf(v)===k});return out}
+ var rest=parts.slice(2).join("/");
+ if(rest==="")out.dirs=["06. Bewaking","07. Inkoop"];
+ else if(rest==="06. Bewaking")out.dirs=["6.1 Financieel"];
+ else if(rest==="06. Bewaking/6.1 Financieel")out.dirs=["6.1.3 Rapportages","6.1.4 Facturen","6.1.6. Dashboard"];
+ else if(rest==="06. Bewaking/6.1 Financieel/6.1.6. Dashboard"||rest==="06. Bewaking/6.1 Financieel/6.1.7 Dashboard"){
+  var pj=S.projects.filter(function(p){return dirName(p)===parts[1]})[0];
+  if(pj&&pj.model&&pj.model.indexOf(parts.join("/")+"/")===0)out.files=[pj.model.split("/").pop()];
+  else out.files=["261117_CAPEX_"+parts[1].replace(/ /g,"_")+".xlsm"]}
+ else if(rest==="07. Inkoop")out.dirs=["7.4. Offertes","7.5 Opdrachten"];
+ return out;
+}
+var running=false,modal=null,logLines=[],progress=0,toast="";
+
+var projNames=function(){return S.projects.map(function(p){return p.name})};
+var allDest=function(){return projNames().concat(SPECIAL.map(function(p){return p.name}))};
+var projByName=function(n){return S.projects.filter(function(p){return p.name===n})[0]};
+function newName(i){
+ var parts=[];
+ if(i.date)parts.push(yymmdd(i.date));
+ if(i.number)parts.push(clean(i.number.replace(/\//g,"-")));
+ if(i.supplier)parts.push(clean(i.supplier));
+ if(!i.number&&!i.supplier)parts=[yymmdd(i.date||todayISO),clean(i.orig.replace(/\.pdf$/i,""))];
+ return parts.join(" ")+".pdf";
+}
+function dupOf(i){
+ if(!i.number)return null;
+ var n=i.number.toLowerCase().replace(/\s/g,""),s=(i.supplier||"").toLowerCase().split(" ")[0];
+ for(var k=0;k<S.db.length;k++){var r=S.db[k];if(r.number.toLowerCase().replace(/\s/g,"")===n&&(r.supplier||"").toLowerCase().split(" ")[0]===s)return r}
+ return null;
+}
+var cur=function(){return S.invoices[S.cur]};
+function mailFor(i){
+ var tot=i.lines.reduce(function(a,x){return a+x[1]},0);
+ var v={leverancier:i.supplier||"(onbekend)",nummer:i.number||"(onbekend)",datum:i.date?i.date.slice(8,10)+"-"+i.date.slice(5,7)+"-"+i.date.slice(0,4):"(onbekend)",project:i.project,bedrag:i.lines.length?eur(tot):(function(){var a=parseFloat(String(i.amount==null?"":i.amount).replace(",","."));return isNaN(a)?"(bedrag niet ingevuld)":eur(a)})(),goedgekeurd:i.approvedOn||todayDMY};
+ var f=function(t){return String(t||"").replace(/\{(\w+)\}/g,function(m,k){return v[k]!==undefined?v[k]:m})};
+ return {subject:f(S.mail.subject),body:f(S.mail.body),file:newName(i)};
+}
+function destFolder(i){
+ if(i.action==="private")return S.special.prive;
+ if(i.action==="unknown")return S.special.onbekend;
+ if(i.action==="duplicate")return S.special.dubbel;
+ if(i.project==="Man&Meer algemeen")return S.special["Man&Meer algemeen"];
+ var pr=projByName(i.project);return pr?pr.folder:"";
+}
+var decided=function(i){return !!i.decided};
+var destOf=function(i){return i.action==="private"?"prive":i.action==="unknown"?"onbekend":i.action==="duplicate"?"dubbel":i.action==="keep"?"(blijft in box in)":i.project};
+
+/* ---------- echte pdf's (test) ---------- */
+var pdfData={},pdfCache={},occ={};
+function loadPdfJs(){return new Promise(function(res,rej){
+ if(window.pdfjsLib)return res(window.pdfjsLib);
+ var sc=document.createElement("script");sc.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+ sc.onload=function(){window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";res(window.pdfjsLib)};
+ sc.onerror=function(){rej(new Error("pdf.js niet geladen"))};document.head.appendChild(sc)})}
+function analyze(c){
+ var t=document.createElement("canvas");t.width=100;t.height=100;var x=t.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,100,100);x.drawImage(c,0,0,100,100);
+ var d=x.getImageData(0,0,100,100).data,g=[];
+ for(var k=0;k<10000;k++){var l=0.3*d[k*4]+0.59*d[k*4+1]+0.11*d[k*4+2];g.push(l<248?1:0)}
+ return g;
+}
+async function prepPdf(id){
+ if(pdfCache[id])return pdfCache[id];
+ var lib=await loadPdfJs(),doc=await lib.getDocument({data:pdfData[id].slice(0)}).promise,pg=await doc.getPage(1);
+ var v0=pg.getViewport({scale:1}),sc=Math.min(2,1400/v0.width),vp=pg.getViewport({scale:sc});
+ var c=document.createElement("canvas");c.width=Math.floor(vp.width);c.height=Math.floor(vp.height);
+ await pg.render({canvasContext:c.getContext("2d"),viewport:vp}).promise;
+ pdfCache[id]={canvas:c,w:c.width,h:c.height,pages:doc.numPages};occ[id]=analyze(c);
+ return pdfCache[id];
+}
+function autoStampReal(i){
+ var pc=pdfCache[i.id],g=occ[i.id];if(!pc||!g)return {x:64,y:2};
+ var w=30,h=Math.max(4,Math.min(30,w*(pc.w/pc.h)*(S.stampRatio||0.43))),m=2.5;
+ for(var y=1;y<=100-h-1;y++){for(var x=2;x<=100-w-2;x++){
+  var ok=true;
+  for(var yy=Math.max(0,Math.floor(y-m));yy<Math.min(100,Math.ceil(y+h+m))&&ok;yy++){for(var xx=Math.max(0,Math.floor(x-m));xx<Math.min(100,Math.ceil(x+w+m));xx++){if(g[yy*100+xx]){ok=false;break}}}
+  if(ok)return {x:x,y:y}}}
+ return {x:64,y:2};
+}
+function drawReal(){
+ var i=cur();if(!i||!i.real||S.step!=="review")return;
+ var pc=pdfCache[i.id];
+ if(!pc){
+  if(i.pdfErr)return;
+  prepPdf(i.id).then(function(){render()}).catch(function(){i.pdfErr=true;render()});return}
+ var cv=document.getElementById("pdfc");if(!cv)return;
+ cv.width=pc.w;cv.height=pc.h;cv.getContext("2d").drawImage(pc.canvas,0,0);
+}
+function addPdfs(files){
+ var arr=Array.prototype.slice.call(files).filter(function(f){return /\.pdf$/i.test(f.name)||f.type==="application/pdf"});
+ if(!arr.length)return;
+ var first=!S.scanned;
+ if(first){S.invoices=[];S.scanned=true;S.done=false;S.result=null}
+ var n=0;
+ arr.forEach(function(f,k){var fr=new FileReader();fr.onload=function(){
+  var id="r"+Date.now()+"_"+k;pdfData[id]=fr.result;
+  S.invoices.push({id:id,orig:f.name,supplier:"",number:"",date:"",to:"",layout:"A",lines:[],real:true,project:"",action:"process",send:true,adm:true,
+   reason:"Eigen pdf. Vul datum, nummer en leverancier zelf in; automatisch lezen komt in de live versie.",conf:"laag"});
+  n++;if(n===arr.length){S.step="review";S.cur=S.invoices.length-1;save();render()}};
+  fr.readAsArrayBuffer(f)});
+}
+function stampHtml(i){
+ var inner=S.stampImg?'<img alt="Stempel" src="'+esc(S.stampImg)+'">':'<div class="stampdef"><b>GOEDGEKEURD</b><span>D. Visser<br>'+esc(i.approvedOn||todayDMY)+'</span></div>';
+ return '<div class="stamp" id="stamp" style="left:'+i.stamp.x+'%;top:'+i.stamp.y+'%" title="Sleep om te verplaatsen">'+inner+'</div>';
+}
+function noteHtml(i){
+ if(i.action!=="process"||!(i.note||"").trim())return "";
+ var p=i.notePos||(i.stamp?{x:i.stamp.x,y:Math.min(i.stamp.y+11,88)}:{x:5,y:3});
+ return '<div class="note" id="note" style="left:'+p.x+'%;top:'+p.y+'%" title="Sleep om te verplaatsen">'+esc(i.note)+'</div>';
+}
+function paperReal(i){
+ var pc=pdfCache[i.id],st=(i.decided&&i.action==="process"&&i.stamp)?stampHtml(i):"";
+ var msg=pc?"":'<div style="position:absolute;inset:0;display:grid;place-items:center;color:#555;font-size:3cqw;text-align:center;padding:6cqw">'+(i.pdfErr?"De pdf kon niet worden getoond (de pdf-lezer is niet geladen).":"Pdf wordt geladen…")+'</div>';
+ return '<div class="paper" id="paper" style="aspect-ratio:'+(pc?pc.w+'/'+pc.h:'210/297')+'"><canvas id="pdfc" style="position:absolute;inset:0;width:100%;height:100%"></canvas>'+msg+st+noteHtml(i)+'</div>'+(pc&&pc.pages>1?'<div class="small muted" style="text-align:center;margin-top:6px">Pagina 1 van '+pc.pages+'. De stempel komt op pagina 1.</div>':"");
+}
+/* ---------- stempelplaats ---------- */
+function blocksOf(i){
+ var l=LAYOUTS[i.layout],h=3+i.lines.length*4.2+22;
+ return [l.head,l.meta,l.addr,{x:l.table.x,y:l.table.y,w:l.table.w,h:h}];
+}
+function autoStamp(i){
+ if(i.real)return autoStampReal(i);
+ var w=30,h=9,b=blocksOf(i),m=1.8;
+ for(var y=2;y<70;y+=1){for(var x=4;x<=100-w-4;x+=2){
+  var ok=true;for(var k=0;k<b.length;k++){var r=b[k];
+   if(x<r.x+r.w+m&&x+w+m>r.x&&y<r.y+r.h+m&&y+h+m>r.y){ok=false;break}}
+  if(ok)return {x:x,y:y}}}
+ return {x:64,y:2};
+}
+
+/* ---------- weergave van de factuur ---------- */
+function paper(i){
+ if(i.real)return paperReal(i);
+ var l=LAYOUTS[i.layout],t=l.table,tblH=3+i.lines.length*4.2+22;
+ var head=i.layout==="B"
+  ?'<div class="blk band" style="left:0;top:0;width:100%;height:11%"><span class="lh">'+esc(i.supplier||"…")+'</span></div>'
+  :'<div class="blk lh" style="left:'+l.head.x+'%;top:'+l.head.y+'%;width:'+l.head.w+'%;height:'+l.head.h+'%">'+esc(i.supplier||"…")+'<div class="t" style="font-weight:400;color:#666">Postbus 100 · KvK 12345678</div></div>';
+ var meta='<div class="blk t" style="left:'+l.meta.x+'%;top:'+l.meta.y+'%;width:'+l.meta.w+'%;height:'+l.meta.h+'%"><div class="tb">FACTUUR</div>Factuurnummer: '+esc(i.number||"—")+'<br>Factuurdatum: '+esc(i.date?i.date.slice(8,10)+"-"+i.date.slice(5,7)+"-"+i.date.slice(0,4):"—")+'<br>Vervaldatum: 30 dagen</div>';
+ var addr='<div class="blk t" style="left:'+l.addr.x+'%;top:'+l.addr.y+'%;width:'+l.addr.w+'%;height:'+l.addr.h+'%">'+esc(i.to||"—")+'<br>t.a.v. administratie<br>Nederland</div>';
+ var tot=i.lines.reduce(function(a,x){return a+x[1]},0),btw=tot*0.21;
+ var rows=i.lines.map(function(x){return '<tr><td>'+esc(x[0])+'</td><td>'+(x[1]?eur(x[1]):"")+'</td></tr>'}).join("");
+ var table='<div class="blk" style="left:'+t.x+'%;top:'+t.y+'%;width:'+t.w+'%;height:'+tblH+'%"><table><tr><td class="tb">Omschrijving</td><td class="tb">Bedrag excl. btw</td></tr>'+rows+
+  (tot?'<tr><td>Btw 21%</td><td>'+eur(btw)+'</td></tr><tr><td class="tb">Totaal</td><td class="tb">'+eur(tot+btw)+'</td></tr>':"")+'</table></div>';
+ var st="";
+ if(i.decided&&i.action==="process"&&i.stamp){
+  st=stampHtml(i);
+ }
+ return '<div class="paper'+(i.scan?" ":"")+'" id="paper"><div class="'+(i.scan?"scan":"")+'" style="position:absolute;inset:0">'+head+meta+addr+table+'</div>'+st+noteHtml(i)+'</div>';
+}
+
+/* ---------- schermen ---------- */
+function stepsBar(){
+ var d=S.invoices.filter(decided).length,n=S.invoices.length;
+ var it=[["start","1  Inlezen",""],["review","2  Beoordelen",n?" ("+d+"/"+n+")":""],["finish","3  Afronden",""],["admin","Beheer",""]];
+ return '<div class="steps" role="tablist">'+it.map(function(x){return '<button class="step" role="tab" data-act="go" data-v="'+x[0]+'"'+(S.step===x[0]?' aria-current="true"':"")+'>'+x[1]+'<small>'+x[2]+'</small></button>'}).join("")+'</div>';
+}
+function vStart(){
+ if(!S.scanned&&LIVE.ready&&LIVE.on){
+  return '<div class="hero card"><h1>Facturen in “box in” afhandelen</h1><p class="big muted">Ingelogd als <b>'+esc(LIVE.acct.username||"")+'</b>. De app leest de map <b>'+esc(S.boxin.split("/").pop())+'</b> en toont elke factuur. Alle keuzes maak je eerst rustig hier; pas bij “Afronden” gebeurt er iets.</p>'+
+   (LIVE.err?'<div class="alert bad" role="alert">'+esc(LIVE.err)+'</div>':'')+
+   '<div class="row"><button class="btn primary big" data-act="livescan"'+(LIVE.busy?' disabled':'')+'>'+(LIVE.busy?esc(LIVE.msg||"Bezig…"):'Box in inlezen')+'</button></div></div>';
+ }
+ if(!S.scanned&&!LIVE.on){
+  return '<div class="hero card"><h1>Facturen in “box in” afhandelen</h1><p class="big muted">Log in met je Microsoft-account om je echte box in te gebruiken. Of probeer de app eerst met voorbeeldfacturen.</p>'+
+   (LIVE.err?'<div class="alert bad" role="alert">'+esc(LIVE.err)+'</div>':'')+
+   '<div class="row"><button class="btn primary big" data-act="login"'+(LIVE.ready?'':' disabled')+'>'+(LIVE.ready?'Inloggen met Microsoft':'Even laden…')+'</button><button class="btn" data-act="scan">Voorbeeldfacturen (simulatie)</button><label class="btn" style="cursor:pointer">Eigen pdf\'s testen<input class="sr" id="pdfin" type="file" accept="application/pdf,.pdf" multiple></label></div></div>';
+ }
+ if(!S.scanned){
+  return '<div class="hero card"><h1>Facturen in “box in” afhandelen</h1>'+
+  '<p class="big muted">Dit is de <b>simulatie</b>: een proefmap met 10 voorbeeldfacturen. Er wordt niets echt hernoemd, verplaatst of verstuurd. Alle keuzes maak je eerst rustig in de app; het werk dat tijd kost gebeurt pas bij “Afronden”.</p>'+
+  '<div class="row"><button class="btn primary big" data-act="scan">Facturen in box in inlezen (proefmap)</button><label class="btn" style="cursor:pointer">Eigen pdf\'s testen<input class="sr" id="pdfin" type="file" accept="application/pdf,.pdf" multiple></label></div></div>';
+ }
+ var ren=S.invoices.map(function(i){return '<div class="li"><div class="a">'+esc(i.orig)+'</div><div class="b">'+esc(newName(i))+'</div><div>'+(i.conf==="laag"?'<span class="tag warn">controleer</span>':i.conf==="midden"?'<span class="tag cy">waarschijnlijk</span>':'<span class="tag ok">gelezen</span>')+'</div></div>'}).join("");
+ return '<div class="stack"><div class="card"><h2>'+S.invoices.length+' facturen ingelezen</h2><p class="muted">Dit zijn de <b>voorgestelde</b> nieuwe namen. De bestanden zelf worden pas bij Afronden hernoemd, zodat je hier niet hoeft te wachten. Je kunt elke naam bij het beoordelen nog aanpassen.</p>'+
+  '<div class="row"><button class="btn primary" data-act="go" data-v="review">Beginnen met beoordelen</button>'+(LIVE.on?'':'<label class="btn" style="cursor:pointer">Eigen pdf\'s toevoegen<input class="sr" id="pdfin" type="file" accept="application/pdf,.pdf" multiple></label>')+(S.invoices.some(function(x){return x.real})&&S.invoices.some(function(x){return !x.real})?'<button class="btn" data-act="clearsample">Voorbeeldfacturen weghalen</button>':"")+(LIVE.on?'<button class="btn" data-act="livescan">Opnieuw inlezen</button>':'<button class="btn" data-act="reset">Opnieuw beginnen (demo)</button>')+'</div></div>'+
+  '<div class="list">'+ren+'</div></div>';
+}
+function vReview(){
+ if(!S.scanned)return '<div class="card">Lees eerst de facturen in bij stap 1.</div>';
+ var i=cur(),d=dupOf(i),pr=projByName(i.project);
+ var chips=S.invoices.map(function(x,k){var c="chip"+(decided(x)?" done":(dupOf(x)?" dup":""));return '<button class="'+c+'" data-act="open" data-v="'+k+'"'+(k===S.cur?' aria-current="true"':"")+' aria-label="Factuur '+(k+1)+'">'+(k+1)+'</button>'}).join("");
+ var actions=[["process","Goedkeuren en archiveren"],["private","Privé (buiten administratie)"],["duplicate","Dubbel (naar map dubbel)"],["unknown","Onbekend (naar map onbekend)"],["keep","Laten staan in box in"]];
+ var projOpts=allDest().filter(function(n){return n!=="prive"&&n!=="onbekend"}).map(function(n){return '<option'+(n===i.project?" selected":"")+'>'+esc(n)+'</option>'}).join("");
+ var needProj=i.action==="process"&&!i.project;
+ var warn=d?'<div class="alert bad" role="alert">⚠ Let op: factuur is eerder verwerkt<div class="small" style="font-weight:400">Gevonden in de database op '+esc(d.date)+' als “'+esc(d.file)+'” ('+esc(d.dest)+').</div></div>':"";
+ var canSend=i.action==="process"&&!i.own&&i.project!=="Man&Meer algemeen";
+ var noMail=canSend&&i.send&&pr&&!pr.email;
+ var side='<div class="side">'+warn+
+ '<div class="card"><div class="lbl">Voorstel</div><p style="margin:4px 0 0">'+esc(i.reason)+'</p></div>'+
+ '<div class="card"><div class="field"><label for="f-date">Factuurdatum</label><input class="inp" id="f-date" type="date" data-f="date" value="'+esc(i.date)+'"></div>'+
+ '<div class="field"><label for="f-num">Factuurnummer</label><input class="inp" id="f-num" data-f="number" value="'+esc(i.number)+'"></div>'+
+ '<div class="field"><label for="f-sup">Leverancier</label><input class="inp" id="f-sup" data-f="supplier" value="'+esc(i.supplier)+'"></div>'+
+ (i.real?'<div class="field"><label for="f-amt">Bedrag excl. btw (voor de mail)</label><input class="inp" id="f-amt" data-f="amount" inputmode="decimal" value="'+esc(i.amount==null?"":i.amount)+'" placeholder="bijv. 7995,00"></div>':"")+
+ '<div class="lbl">Nieuwe bestandsnaam</div><div style="font-weight:700;overflow-wrap:anywhere">'+esc(newName(i))+'</div></div>'+
+ '<div class="card"><div class="field"><label for="f-act">Wat moet er gebeuren</label><select class="inp" id="f-act" data-f="action">'+actions.map(function(a){return '<option value="'+a[0]+'"'+(a[0]===i.action?" selected":"")+'>'+a[1]+'</option>'}).join("")+'</select></div>'+
+ (i.action==="process"?'<div class="field"><label for="f-proj">Project</label><select class="inp" id="f-proj" data-f="project">'+(i.project?"":'<option value="">— kies een project —</option>')+projOpts+'<option value="__new">＋ Nieuw project aanmaken…</option></select></div>':"")+
+ (needProj?'<div class="alert warn small">Kies eerst een project voordat je goedkeurt.</div>':"")+
+ '</div>'+
+ (i.action==="process"?'<div class="card">'+
+  '<label class="check" aria-disabled="'+(!canSend)+'"><input type="checkbox" data-f="send"'+(i.send&&canSend?" checked":"")+(canSend?"":" disabled")+'><span><b>Stuur door naar administratie</b><span class="small muted" style="display:block">'+(i.own?"Eigen factuur: wordt niet doorgestuurd.":!canSend?"Voor dit project is geen administratie.":(pr&&pr.email?"Naar "+esc(pr.email)+" bij Afronden.":""))+'</span></span></label>'+
+  (noMail?'<div class="alert warn small" style="margin-bottom:8px">Voor dit project is nog geen e-mailadres ingevuld. <a href="#" data-act="go" data-v="admin">Invullen bij Beheer</a></div>':"")+
+  '<label class="check" aria-disabled="'+(!canSend)+'"><input type="checkbox" data-f="adm"'+(i.adm&&canSend?" checked":"")+(canSend?"":" disabled")+'><span><b>Verwerk in administratie</b><span class="small muted" style="display:block">'+(pr&&pr.model?"Voorstel in kopie van het model, jij controleert.":"Bij dit project is nog geen model ingesteld.")+'</span></span></label>'+
+  '<div class="field" style="margin-top:10px"><label for="f-note">Extra tekst op de factuur (mag leeg)</label><textarea class="inp" id="f-note" data-f="note" rows="2" placeholder="Bijvoorbeeld: akkoord t/m termijn 3">'+esc(i.note||"")+'</textarea><span class="small muted">Komt als kader op de factuur. Sleep het kader naar een goede plek.</span></div>'+
+  (decided(i)?'<div class="alert info small">Goedgekeurd op '+esc(i.approvedOn)+'. Sleep de stempel op de factuur naar een betere plek als dat nodig is.</div><div class="row" style="margin-top:8px"><button class="btn" data-act="undo">Goedkeuring ongedaan maken</button></div>'
+   :'<button class="btn ok" style="width:100%;font-size:18px" data-act="approve"'+(needProj?" disabled":"")+'>✓ Goedkeuren</button>')+
+  '</div>':
+  '<div class="card">'+(decided(i)?'<div class="alert info small">Keuze vastgelegd: '+esc(destOf(i))+'</div><div class="row" style="margin-top:8px"><button class="btn" data-act="undo">Keuze wijzigen</button></div>':'<button class="btn primary" style="width:100%" data-act="approve">Keuze vastleggen</button>')+'</div>')+
+ (decided(i)?"":'<div class="card"><button class="btn" style="width:100%" data-act="skip">Overslaan: laat deze factuur staan in box in</button></div>')+
+ '<div class="nav"><button class="btn" data-act="prev"'+(S.cur===0?" disabled":"")+'>← Vorige</button><button class="btn primary" data-act="next">'+(S.cur===S.invoices.length-1?"Naar afronden →":"Volgende →")+'</button></div></div>';
+ return '<div class="chips" aria-label="Facturen">'+chips+'</div>'+
+  '<div class="review"><div><div class="muted small" style="margin-bottom:6px">Factuur '+(S.cur+1)+' van '+S.invoices.length+' · origineel: '+esc(i.orig)+'</div><div class="desk"><div class="pagewrap">'+paper(i)+'</div></div></div>'+side+'</div>';
+}
+function planRows(){
+ return S.invoices.map(function(i){
+  var pr=projByName(i.project),acts=[];
+  if(!decided(i)){return {i:i,acts:[],pending:true}}
+  if(i.action==="keep")return {i:i,acts:["Blijft ongewijzigd in box in"]};
+  acts.push("Hernoemen naar "+newName(i));
+  if(i.action==="process")acts.push("Stempel op de pdf zetten ("+i.approvedOn+")");
+  var sendable=i.action==="process"&&i.send&&!i.own&&pr;
+  if(sendable){acts.push(pr.email?"Mail aan "+pr.email+(S.cc?" (cc "+S.cc+")":"")+" met de pdf als bijlage; kopie komt in Verzonden items":"__noMail")}
+  if(!destFolder(i))acts.push("__noFolder");
+  else acts.push(LIVE.on&&S.test?"Kopie naar "+S.boxin.split("/").pop()+"/_test uitgevoerd/"+clean(destOf(i))+" (testmodus)":"Verplaatsen naar "+destFolder(i));
+  if(i.action!=="duplicate")acts.push(LIVE.on&&S.test?"Toevoegen aan facturen_database_TEST.csv":"Toevoegen aan facturen_database.csv");
+  if(i.action==="process"&&i.adm&&pr)acts.push(LIVE.on?"Noteren in de database: administratie bijwerken (voorstel via Claude)":(pr.model?"Voorstel klaarzetten: kopie van "+pr.model+" met nieuwe regel (geel)":"__noModel"));
+  return {i:i,acts:acts};
+ });
+}
+function vFinish(){
+ if(!S.scanned)return '<div class="card">Lees eerst de facturen in bij stap 1.</div>';
+ var plan=planRows(),pend=plan.filter(function(p){return p.pending}).length,issues=0;
+ var rows=plan.map(function(p){
+  var i=p.i;
+  var c=p.pending?'<span class="tag gray">nog niet beoordeeld: blijft in box in</span>':p.acts.map(function(a){
+   if(a==="__noMail"){issues++;return '<span class="tag warn">mail overgeslagen: geen adres bij project</span>'}
+   if(a==="__noFolder"){issues++;return '<span class="tag warn">geen mapadres ingevuld: verplaatsen overgeslagen</span>'}
+   if(a==="__noModel"){return '<span class="tag gray">geen model ingesteld: administratie niet bijgewerkt</span>'}
+   return '<span class="sub" style="color:var(--ink)">• '+esc(a)+'</span>'}).join("");
+  var mp=(!p.pending&&p.acts.some(function(a){return /^Mail aan/.test(a)}))?(function(){var m=mailFor(i);return '<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--cyan-ink);font-weight:600;min-height:32px">Bekijk de mail</summary><div class="card" style="padding:12px;margin-top:6px"><div class="small"><b>Onderwerp:</b> '+esc(m.subject)+'<br><b>Bijlage:</b> '+esc(m.file)+'</div><pre style="white-space:pre-wrap;font:inherit;margin:8px 0 0">'+esc(m.body)+'</pre></div></details>'})():"";
+  return '<tr><td><b>'+(S.invoices.indexOf(i)+1)+'</b></td><td>'+esc(i.orig)+'<span class="sub">'+esc(destOf(i))+'</span></td><td>'+c+mp+'</td></tr>';
+ }).join("");
+ var nMail=plan.filter(function(p){return p.acts.some(function(a){return /^Mail aan/.test(a)})}).length;
+ var nDo=plan.filter(function(p){return !p.pending&&p.i.action!=="keep"}).length;
+ var summary='<div class="card"><h2>Alles op een rij</h2><p class="muted">Controleer dit overzicht. Pas als je op de knop drukt, gebeurt er iets. '+(LIVE.on?(S.test?"TESTMODUS: je originelen blijven in box in; kopieën komen in de map _test uitgevoerd. Mails gaan wel echt weg.":"LIVE: bestanden worden echt hernoemd, verplaatst en gemaild."):"In de simulatie blijft dat zonder gevolgen voor je echte bestanden.")+'</p>'+
+  '<div class="row"><span class="tag ok">'+nDo+' facturen afhandelen</span><span class="tag cy">'+nMail+' mails</span>'+(pend?'<span class="tag warn">'+pend+' nog niet beoordeeld</span>':"")+(issues?'<span class="tag warn">'+issues+' aandachtspunt(en)</span>':"")+'</div></div>';
+ var run='';
+ if(S.done&&S.result&&S.result.rows){
+  var R=S.result.rows,grp=function(key,empty){var m={},o=[];R.forEach(function(r){var k=r[key]||empty;if(!m[k]){m[k]=0;o.push(k)}m[k]++});return o.map(function(k){return [k,m[k]]})};
+  var nm=R.filter(function(r){return r.mail}).length,na=R.filter(function(r){return r.adm}).length;
+  var t1='<tr><th>Soort</th><th>Aantal</th></tr>'+grp("kind","-").map(function(g){return '<tr><td>'+esc(g[0])+'</td><td>'+g[1]+'</td></tr>'}).join("");
+  var t2='<tr><th>Verplaatst naar</th><th>Aantal</th></tr>'+grp("dest","niet verplaatst (geen mapadres)").map(function(g){return '<tr><td>'+esc(g[0])+'</td><td>'+g[1]+'</td></tr>'}).join("");
+  var mm=R.filter(function(r){return r.mail}),t3=mm.length?'<tr><th>Gemaild aan</th><th>Aantal</th></tr>'+grp("mail","").filter(function(g){return g[0]}).map(function(g){return '<tr><td>'+esc(g[0])+'</td><td>'+g[1]+'</td></tr>'}).join(""):'';
+  var t4='<tr><th>Factuur</th><th>Leverancier</th><th>Verplaatst naar</th><th>Gemaild aan</th><th>Administratie</th><th>Status</th></tr>'+R.map(function(r){return '<tr><td>'+esc(r.file)+'</td><td>'+esc(r.supplier)+'</td><td>'+esc(r.dest||"niet verplaatst")+'</td><td>'+esc(r.mail||"–")+'</td><td>'+(r.adm?"voor Claude genoteerd":"–")+'</td><td>'+esc(r.status||"gelukt")+'</td></tr>'}).join("");
+  run='<div class="card"><h2>Klaar'+(S.result.live?(S.result.test?" (testmodus)":""):" (simulatie)")+' · samenvatting '+esc(S.result.date||"")+'</h2>'+(S.result.test?'<div class="alert info small">Testmodus: de originelen staan nog in box in. De kopieën staan in de map _test uitgevoerd, de database-regels in facturen_database_TEST.csv.</div>':"")+(S.result.errors?'<div class="alert bad small" role="alert">'+S.result.errors+' factuur/facturen niet (volledig) verwerkt. Zie de kolom Status.</div>':"")+'<div class="row"><span class="tag ok">'+R.filter(function(r){return r.ok!==false}).length+' facturen afgehandeld</span><span class="tag cy">'+nm+' mails verstuurd</span>'+(na?'<span class="tag cy">'+na+' voorstellen administratie</span>':"")+'<span class="tag gray">'+S.result.left+' blijven in box in</span></div>'+
+   '<div class="tblwrap" style="margin-top:12px"><table class="tbl">'+t1+'</table></div><div class="tblwrap" style="margin-top:12px"><table class="tbl">'+t2+'</table></div>'+(t3?'<div class="tblwrap" style="margin-top:12px"><table class="tbl">'+t3+'</table></div>':'')+
+   '<h3 style="margin-top:16px">Per factuur</h3><div class="tblwrap"><table class="tbl">'+t4+'</table></div><div class="row" style="margin-top:12px"><button class="btn primary" data-act="reset">Nieuwe ronde</button></div></div>'}
+ else if(S.done){run='<div class="card"><h2>Klaar (simulatie)</h2><div class="row"><button class="btn primary" data-act="reset">Nieuwe proefronde</button></div></div>'}
+ else if(running){run='<div class="card"><h2>Bezig…</h2><div class="prog"><i style="width:'+progress+'%"></i></div><ul class="log" style="margin-top:12px">'+logLines.map(function(l){return '<li>'+esc(l)+'</li>'}).join("")+'</ul></div>'}
+ else{run='<div class="card"><div class="row"><button class="btn primary big" data-act="run"'+(nDo?"":" disabled")+'>'+(LIVE.on?(S.test?'Alles uitvoeren (testmodus)':'Alles uitvoeren (live)'):'Alles uitvoeren (simulatie)')+'</button>'+(pend?'<span class="muted small">'+pend+' facturen blijven in box in.</span>':"")+'</div></div>'}
+ return '<div class="stack">'+summary+'<div class="card"><div class="tblwrap"><table class="tbl"><thead><tr><th>#</th><th>Factuur</th><th>Wat er gebeurt</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'+run+'</div>';
+}
+function vAdmin(){
+ var pr=S.projects.map(function(p,k){
+  return '<div class="card"><div class="row" style="justify-content:space-between"><h3>'+esc(p.name)+'</h3><button class="btn danger" data-act="delproj" data-v="'+k+'" aria-label="Project verwijderen">Verwijderen</button></div>'+
+  '<div class="field" style="margin-top:12px"><label for="p'+k+'e">E-mailadres administratie</label><input class="inp" id="p'+k+'e" data-p="'+k+'" data-pf="email" type="email" value="'+esc(p.email)+'" placeholder="nog niet ingevuld"></div>'+
+  '<div class="field"><label for="p'+k+'f">Mapadres facturen</label><div class="pathrow"><input class="inp" id="p'+k+'f" data-p="'+k+'" data-pf="folder" value="'+esc(p.folder)+'" placeholder="nog niet ingevuld"><button class="btn" data-act="browse" data-v="'+k+':folder">Bladeren…</button></div></div>'+
+  '<div class="field"><label for="p'+k+'m">Model (CAPEX)</label><div class="pathrow"><input class="inp" id="p'+k+'m" data-p="'+k+'" data-pf="model" value="'+esc(p.model)+'" placeholder="geen model"><button class="btn" data-act="browse" data-v="'+k+':model">Bladeren…</button></div></div></div>';
+ }).join("");
+ var sp=SPECIAL.concat([{name:"dubbel",note:"Facturen die al eerder verwerkt zijn"}]).map(function(p,k){return '<div class="field"><label for="sp'+k+'">'+esc(p.name)+' <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· '+esc(p.note)+'</span></label><div class="pathrow"><input class="inp" id="sp'+k+'" data-sf="'+esc(p.name)+'" value="'+esc(S.special[p.name]||"")+'" placeholder="nog niet ingevuld"><button class="btn" data-act="browse" data-v="s:'+esc(p.name)+'">Bladeren…</button></div></div>'}).join("");
+ return '<div class="stack">'+
+ '<div class="card"><div class="row" style="justify-content:space-between"><h2>Beheer</h2><span id="syncst">'+syncHtml()+'</span></div><p class="muted">Adressen worden onthouden en kun je hier altijd wijzigen. De e-mailadressen hieronder zijn voorbeelden.</p>'+
+  '<div class="two"><div class="field"><label for="cc">Extra kopie naar (laat leeg)</label><input class="inp" id="cc" data-g="cc" type="email" value="'+esc(S.cc)+'" placeholder="geen"><span class="muted small">Elke mail staat vanzelf in je Verzonden items. Vul hier niets in: een kopie in je inbox laat je automatisering de factuur opnieuw oppakken.</span></div>'+
+  '<div class="field"><label>Verzenden vanaf</label><div class="inp" style="display:flex;align-items:center">'+MAILBOX+'</div></div></div></div>'+
+ '<div class="card"><h3>Mail naar de administratie</h3><p class="muted small">Zo ziet elke mail eruit. Je kunt de tekst aanpassen. Deze woorden worden vanzelf ingevuld: {leverancier} {nummer} {datum} {project} {bedrag} {goedgekeurd}.</p>'+
+  '<div class="field"><label for="m-sub">Onderwerp</label><input class="inp" id="m-sub" data-mail="subject" value="'+esc(S.mail.subject)+'"></div>'+
+  '<div class="field"><label for="m-body">Tekst</label><textarea class="inp" id="m-body" data-mail="body" rows="12" style="font-family:inherit">'+esc(S.mail.body)+'</textarea></div>'+
+  '<div class="row"><button class="btn" data-act="mailreset">Standaardtekst terugzetten</button></div>'+
+  '<div class="lbl" style="margin-top:14px">Voorbeeld (met factuur 1 uit de proefmap)</div><div class="card" style="padding:12px;margin-top:6px"><div class="small" id="m-prevh"></div><pre id="m-prev" style="white-space:pre-wrap;font:inherit;margin:8px 0 0"></pre></div></div>'+
+ '<div class="card"><h3>Stempel</h3><p class="muted small">Standaard komt er een stempel met tekst “goedgekeurd door David Visser” en de datum. Upload je eigen stempel (png, jpeg) om die te gebruiken. In de simulatie blijft hij alleen in deze browser staan.</p>'+
+  '<div class="row"><label class="btn" style="cursor:pointer">Eigen stempel kiezen<input class="sr" id="stampfile" type="file" accept="image/png,image/jpeg,image/*"></label>'+(S.stampImg?'<img alt="Je stempel" src="'+esc(S.stampImg)+'" style="height:56px;border:1px solid var(--line);border-radius:6px;background:#fff"><button class="btn" data-act="nostamp">Standaardstempel gebruiken</button>':'<span class="tag gray">standaardstempel</span>')+'</div></div>'+
+ '<div class="row" style="justify-content:space-between"><h3>Projecten</h3><button class="btn primary" data-act="newproj">＋ Nieuw project</button></div>'+
+ '<div class="two">'+pr+'</div>'+
+ '<div class="card"><h3>Vaste mappen</h3><p class="muted small">Waar facturen heen gaan die bij geen project horen. Deze adressen kun je hier wijzigen.</p>'+sp+'</div>'+
+ '<div class="card"><h3>Werkwijze</h3>'+(LIVE.on?
+  '<p class="muted small">Ingelogd als <b>'+esc(LIVE.acct.username||"")+'</b>.</p>'+
+  '<label class="check"><input type="checkbox" data-g="test"'+(S.test?' checked':'')+'><span><b>Testmodus</b><span class="small muted" style="display:block">Aan: je originelen blijven in box in; kopieën komen in de map _test uitgevoerd en de regels in facturen_database_TEST.csv. Mails worden wel echt verstuurd. Uit: de app verplaatst en hernoemt echt.</span></span></label>'+
+  '<div class="field" style="margin-top:10px"><label for="boxin">Map met te verwerken facturen (box in)</label><div class="pathrow"><input class="inp" id="boxin" data-g="boxin" value="'+esc(S.boxin)+'"><button class="btn" data-act="browse" data-v="b:boxin">Bladeren…</button></div></div>'+
+  '<div class="row"><button class="btn" data-act="logout">Uitloggen</button></div>'
+  :'<div class="row"><span class="tag ok">Simulatie actief</span><button class="btn primary" data-act="login"'+(LIVE.ready?'':' disabled')+'>Inloggen met Microsoft</button></div><p class="muted small">Log in om je echte OneDrive en mail te gebruiken.</p><button class="btn danger" data-act="reset">Alle demo-gegevens terugzetten</button>')+'</div></div>';
+}
+function vBrowse(){
+ var t=LIVE.on?(browse.data||{dirs:[],files:[],loading:true}):treeFor(browse.path),segs=browse.path?browse.path.split("/"):[],file=browse.field==="model";
+ var crumbs='<button data-act="bcd" data-v="">OneDrive</button>'+segs.map(function(sg,k){return '<span class="muted">›</span><button data-act="bcd" data-v="'+esc(segs.slice(0,k+1).join("/"))+'">'+esc(sg)+'</button>'}).join("");
+ var items=t.dirs.map(function(d){return '<button data-act="bcd" data-v="'+esc((browse.path?browse.path+"/":"")+d)+'">📁 '+esc(d)+'</button>'}).join("")+
+  (file?t.files.map(function(f){return '<button data-act="bfile" data-v="'+esc(browse.path+"/"+f)+'">📊 <b>'+esc(f)+'</b></button>'}).join(""):"");
+ return '<div class="modal" role="dialog" aria-modal="true"><div class="card"><h2>'+(file?"Model kiezen":"Map kiezen")+'</h2>'+
+  '<p class="muted small">'+(LIVE.on?'Je eigen OneDrive.':'Voorbeeldstructuur van je OneDrive.')+'</p><div class="crumbs">'+crumbs+'</div>'+
+  '<div class="bl">'+(items||'<div class="empty">'+(t.loading?"Laden…":t.err?"Fout: "+esc(t.err):(file?"Geen modellen in deze map.":"Geen submappen."))+'</div>')+'</div>'+
+  '<div class="row" style="margin-top:12px">'+(file?"":'<button class="btn primary" data-act="bpick"'+(browse.path?"":" disabled")+'>Deze map kiezen</button>')+'<button class="btn" data-act="bcancel">Annuleren</button></div></div></div>';
+}
+function vModal(){
+ if(browse)return vBrowse();
+ if(!modal)return"";
+ return '<div class="modal" role="dialog" aria-modal="true"><div class="card"><h2>Nieuw project</h2><p class="muted small">Er wordt nu nog geen map aangemaakt. Dat gebeurt pas bij Afronden, nadat je alles hebt bevestigd.</p>'+
+  '<div class="field"><label for="n-name">Naam (plaats - project)</label><input class="inp" id="n-name" placeholder="Utrecht - Voorbeeldproject"></div>'+
+  '<div class="field"><label for="n-mail">E-mailadres administratie</label><input class="inp" id="n-mail" type="email"></div>'+
+  '<div class="field"><label for="n-folder">Mapadres facturen (mag later)</label><input class="inp" id="n-folder"></div>'+
+  '<div class="row"><button class="btn primary" data-act="saveproj">Project toevoegen</button><button class="btn" data-act="cancelmodal">Annuleren</button></div></div></div>';
+}
+function mailPrev(){var a=document.getElementById("m-prev");if(!a)return;var i=demoInvoices()[0];i.approvedOn=todayDMY;var m=mailFor(i);document.getElementById("m-prevh").innerHTML="<b>Onderwerp:</b> "+esc(m.subject)+"<br>"+(S.cc?"<b>Cc:</b> "+esc(S.cc)+" · ":"")+"<b>Bijlage:</b> "+esc(m.file);a.textContent=m.body}
+function render(){
+ var el=document.getElementById("app");
+ var v=S.step==="start"?vStart():S.step==="review"?vReview():S.step==="finish"?vFinish():vAdmin();
+ var focus=document.activeElement&&document.activeElement.id;
+ var ban=LIVE.on?(S.test?'<div class="sim">TESTMODUS · je box in blijft ongemoeid, kopieën gaan naar _test uitgevoerd. Mails gaan wel echt weg.</div>':'<div class="sim" style="background:var(--bad-soft);color:var(--bad);border-color:var(--bad)">LIVE · bestanden worden echt hernoemd, verplaatst en gemaild</div>'):'<div class="sim">SIMULATIE · er wordt niets echt hernoemd, verplaatst of verstuurd</div>';
+ el.innerHTML=ban+'<div class="bar"><div class="brand">Facturen <span>afhandelen</span></div>'+stepsBar()+'</div>'+v+vModal();
+ if(focus){var f=document.getElementById(focus);if(f&&f.tagName==="INPUT"&&f.type!=="date"){try{f.focus();var l=f.value.length;f.setSelectionRange(l,l)}catch(e){}}}
+ bindStamp();mailPrev();drawReal();
+}
+
+/* ---------- acties ---------- */
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+async function run(){
+ running=true;logLines=[];progress=0;S.step="finish";render();
+ var plan=planRows().filter(function(p){return !p.pending&&p.i.action!=="keep"});
+ var total=plan.reduce(function(a,p){return a+p.acts.length},0),n=0,res=[];
+ for(var k=0;k<plan.length;k++){
+  var p=plan[k];
+  for(var a=0;a<p.acts.length;a++){
+   var t=p.acts[a];
+   if(t.indexOf("__")===0){n++;continue}
+   logLines.push("("+(k+1)+"/"+plan.length+") "+t);n++;progress=Math.round(n/total*100);render();
+   await sleep(160);
+  }
+  var i=p.i;
+  var mailed=p.acts.some(function(a){return /^Mail aan/.test(a)});
+  res.push({file:newName(i),supplier:i.supplier||"(onbekend)",number:i.number||"(onbekend)",kind:destOf(i),
+   dest:destFolder(i)||"",mail:mailed?projByName(i.project).email:"",
+   adm:p.acts.some(function(a){return /^Voorstel klaarzetten/.test(a)})});
+  if(i.action!=="duplicate")S.db.push({date:todayISO,number:i.number||"(onbekend)",supplier:i.supplier||"(onbekend)",dest:destOf(i),file:newName(i)});
+ }
+ S.invoices=S.invoices.filter(function(i){return !(decided(i)&&i.action!=="keep")});
+ S.cur=0;S.done=true;S.result={rows:res,left:S.invoices.length,date:todayDMY};running=false;save();render();
+}
+function approve(){
+ var i=cur();
+ if(i.action==="process"&&!i.project)return;
+ i.decided=true;
+ if(i.action==="process"){i.approvedOn=todayDMY;i.stamp=autoStamp(i)}
+ save();render();
+}
+document.addEventListener("click",function(e){
+ var t=e.target.closest("[data-act]");if(!t)return;
+ var a=t.getAttribute("data-act"),v=t.getAttribute("data-v");
+ if(a!=="run")e.preventDefault&&e.preventDefault();
+ if(running)return;
+ if(a==="go"){S.step=v;save();render();window.scrollTo(0,0)}
+ else if(a==="scan"){t.disabled=true;t.textContent="Bezig met inlezen…";setTimeout(function(){S.invoices=demoInvoices();S.scanned=true;S.done=false;S.result=null;save();render()},900)}
+ else if(a==="open"){S.cur=+v;save();render()}
+ else if(a==="prev"){S.cur=Math.max(0,S.cur-1);save();render();window.scrollTo(0,0)}
+ else if(a==="next"){if(S.cur<S.invoices.length-1){S.cur++}else{S.step="finish"}save();render();window.scrollTo(0,0)}
+ else if(a==="skip"){var i0=cur();i0.action="keep";i0.decided=true;i0.stamp=null;save();if(S.cur<S.invoices.length-1){S.cur++}else{S.step="finish"}save();render();window.scrollTo(0,0)}
+ else if(a==="approve")approve();
+ else if(a==="undo"){var i=cur();i.decided=false;i.stamp=null;save();render()}
+ else if(a==="run"){if(S.invoices.some(function(x){return x.live})&&LIVE.on){if(!S.test&&!confirm("Dit hernoemt en verplaatst echt bestanden en verstuurt echte mails. Doorgaan?"))return;liveRun()}else run()}
+ else if(a==="login"){LIVE.msal&&LIVE.msal.loginRedirect({scopes:SCOPES})}
+ else if(a==="logout"){LIVE.msal&&LIVE.msal.logoutRedirect({account:LIVE.acct,postLogoutRedirectUri:REDIRECT})}
+ else if(a==="livescan")liveScan();
+ else if(a==="reset"){var keep={projects:S.projects,special:S.special,mail:S.mail,cc:S.cc,stampImg:S.stampImg,stampRatio:S.stampRatio,test:S.test,boxin:S.boxin,db:S.db};S=fresh();if(LIVE.on)Object.keys(keep).forEach(function(k){S[k]=keep[k]});save();render();window.scrollTo(0,0)}
+ else if(a==="newproj"){modal={};render()}
+ else if(a==="cancelmodal"){modal=null;var i2=cur();if(i2&&i2.project==="__new")i2.project="";render()}
+ else if(a==="saveproj"){
+  var nm=document.getElementById("n-name").value.trim();
+  if(!nm||projNames().indexOf(nm)>-1){document.getElementById("n-name").style.borderColor="var(--bad)";return}
+  S.projects.push({name:nm,email:document.getElementById("n-mail").value.trim(),folder:document.getElementById("n-folder").value.trim(),model:"",isNew:true});
+  var i3=cur();if(S.step==="review"&&i3&&i3.action==="process")i3.project=nm;
+  modal=null;save();render();
+ }
+ else if(a==="delproj"){S.projects.splice(+v,1);save();render()}
+ else if(a==="browse"){
+  if(v==="b:boxin"){browse={boxin:true,field:"folder",path:S.boxin}}
+  else if(v.indexOf("s:")===0){var nm=v.slice(2);browse={sp:nm,field:"folder",path:(S.special[nm]||BASE).replace(/\/$/,"")}}
+  else{var q=v.split(":"),pj=S.projects[+q[0]],cp=(pj[q[1]]||"").split("/");if(q[1]==="model")cp.pop();browse={k:+q[0],field:q[1],path:cp.filter(Boolean).join("/")};if(q[1]==="folder"&&!pj.folder)browse.path="projecten"}
+  if(LIVE.on)liveBrowse();else render()}
+ else if(a==="bcd"){browse.path=v;if(LIVE.on)liveBrowse();else render()}
+ else if(a==="bpick"){if(browse.boxin)S.boxin=browse.path;else if(browse.sp)S.special[browse.sp]=browse.path;else S.projects[browse.k].folder=browse.path;browse=null;save();render()}
+ else if(a==="bfile"){S.projects[browse.k].model=v;browse=null;save();render()}
+ else if(a==="bcancel"){browse=null;render()}
+ else if(a==="mailreset"){S.mail=defMail();save();render()}
+ else if(a==="nostamp"){S.stampImg="";S.stampRatio=0.43;save();render()}
+ else if(a==="clearsample"){S.invoices=S.invoices.filter(function(x){return x.real});S.cur=0;save();render()}
+});
+document.addEventListener("change",function(e){
+ var t=e.target;
+ if(t.id==="stampfile"&&t.files&&t.files[0]){var fr=new FileReader();fr.onload=function(){
+   var im=new Image();im.onload=function(){
+    var w=Math.min(500,im.naturalWidth),c=document.createElement("canvas");c.width=w;c.height=Math.round(w*im.naturalHeight/im.naturalWidth);
+    c.getContext("2d").drawImage(im,0,0,c.width,c.height);
+    var url=c.toDataURL("image/png");
+    if(url.length>230000){c.width=300;c.height=Math.round(300*im.naturalHeight/im.naturalWidth);c.getContext("2d").drawImage(im,0,0,c.width,c.height);url=c.toDataURL("image/png")}
+    S.stampImg=url;S.stampRatio=im.naturalHeight/im.naturalWidth;save();render()};
+   im.src=String(fr.result)};fr.readAsDataURL(t.files[0]);return}
+ if(t.id==="pdfin"&&t.files&&t.files.length){addPdfs(t.files);t.value="";return}
+ if(t.getAttribute&&t.getAttribute("data-g")==="test"){S.test=t.checked;save();render();return}
+ var f=t.getAttribute&&t.getAttribute("data-f");
+ if(f==="number"||f==="supplier"||f==="amount"){cur()[f]=t.value;save();return}
+ if(f){
+  var i=cur();
+  if(f==="note"){i.note=t.value;save();updNote(i);return}
+  if(f==="project"&&t.value==="__new"){i.project="__new";modal={};render();return}
+  if(f==="send"||f==="adm")i[f]=t.checked;
+  else if(f==="action"){
+   i.action=t.value;i.decided=false;i.stamp=null;
+   if(t.value==="private"){i.project="prive";i.send=false;i.adm=false}
+   else if(t.value==="unknown"){i.project="onbekend";i.send=false;i.adm=false}
+   else if(t.value==="duplicate"){i.send=false;i.adm=false}
+   else if(t.value==="process"&&(i.project==="prive"||i.project==="onbekend"||i.project==="__new"))i.project="";
+  }
+  else {i[f]=t.value;if(f==="project"){i.decided=false;i.stamp=null;var p=projByName(t.value);if(p&&!i.own&&t.value!=="Man&Meer algemeen"){i.send=true;i.adm=true}else{i.send=false;i.adm=false}}}
+  save();render();return;
+ }
+});
+document.addEventListener("input",function(e){
+ var t=e.target;
+ if(t.getAttribute&&t.getAttribute("data-sf")){S.special[t.getAttribute("data-sf")]=t.value;save();return}
+ if(t.getAttribute&&t.getAttribute("data-mail")){S.mail[t.getAttribute("data-mail")]=t.value;save();mailPrev();return}
+ var pf=t.getAttribute&&t.getAttribute("data-pf");
+ if(pf){S.projects[+t.getAttribute("data-p")][pf]=t.value;save();return}
+ if(t.getAttribute&&t.getAttribute("data-g")==="cc"){S.cc=t.value;save();return}
+ if(t.getAttribute&&t.getAttribute("data-g")==="boxin"){S.boxin=t.value;save();return}
+ var f=t.getAttribute&&t.getAttribute("data-f");
+ if(f==="note"){var ci=cur();ci.note=t.value;save();updNote(ci);return}
+ if(f&&(f==="number"||f==="supplier"||f==="amount")){cur()[f]=t.value;save();render()}
+});
+function updNote(i){
+ var pp=document.getElementById("paper");if(!pp)return;
+ var n=document.getElementById("note"),has=(i.note||"").trim();
+ if(!has){if(n)n.remove();return}
+ if(!n){var w=document.createElement("div");w.innerHTML=noteHtml(i);n=w.firstChild;pp.appendChild(n);bindDrag(n,function(x,y){cur().notePos={x:x,y:y}})}
+ n.textContent=i.note;
+}
+function bindStamp(){
+ bindDrag(document.getElementById("stamp"),function(x,y){cur().stamp={x:x,y:y}});
+ bindDrag(document.getElementById("note"),function(x,y){cur().notePos={x:x,y:y}});
+}
+/* stempel en notitie verslepen (muis en vinger) */
+function bindDrag(st,setPos){
+ var pp=document.getElementById("paper");if(!st||!pp)return;
+ var drag=null;
+ st.addEventListener("pointerdown",function(e){var r=pp.getBoundingClientRect(),s=st.getBoundingClientRect();drag={dx:e.clientX-s.left,dy:e.clientY-s.top,r:r};st.setPointerCapture(e.pointerId);st.classList.add("drag");e.preventDefault()});
+ st.addEventListener("pointermove",function(e){
+  if(!drag)return;
+  var r=drag.r,w=st.offsetWidth/r.width*100,h=st.offsetHeight/r.height*100;
+  var x=(e.clientX-drag.dx-r.left)/r.width*100,y=(e.clientY-drag.dy-r.top)/r.height*100;
+  x=Math.max(0,Math.min(100-w,x));y=Math.max(0,Math.min(100-h,y));
+  st.style.left=x+"%";st.style.top=y+"%";setPos(+x.toFixed(1),+y.toFixed(1));
+ });
+ var end=function(){if(drag){drag=null;st.classList.remove("drag");save()}};
+ st.addEventListener("pointerup",end);st.addEventListener("pointercancel",end);
+}
+/* ================= LIVE: Microsoft inloggen, OneDrive, mail ================= */
+function loadScript(src){return new Promise(function(res,rej){var sc=document.createElement("script");sc.src=src;sc.onload=res;sc.onerror=function(){rej(new Error("kon "+src+" niet laden"))};document.head.appendChild(sc)})}
+async function msalInit(){
+ try{
+  if(!window.msal)await loadScript("https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js");
+  LIVE.msal=new window.msal.PublicClientApplication({auth:{clientId:CLIENT_ID,authority:"https://login.microsoftonline.com/"+TENANT_ID,redirectUri:REDIRECT,navigateToLoginRequestUrl:false},cache:{cacheLocation:"localStorage"}});
+  if(LIVE.msal.initialize)await LIVE.msal.initialize();
+  var r=await LIVE.msal.handleRedirectPromise();
+  var a=(r&&r.account)||LIVE.msal.getAllAccounts()[0]||null;
+  if(a){LIVE.acct=a;if(LIVE.msal.setActiveAccount)LIVE.msal.setActiveAccount(a);LIVE.on=true}
+ }catch(e){LIVE.err="Inloggen voorbereiden mislukt: "+e.message}
+ LIVE.ready=true;render();
+ if(LIVE.on)loadLiveSettings();
+}
+async function token(){
+ try{var r=await LIVE.msal.acquireTokenSilent({scopes:SCOPES,account:LIVE.acct});return r.accessToken}
+ catch(e){LIVE.on=false;LIVE.err="Je sessie is verlopen. Log opnieuw in (je keuzes in deze ronde gaan dan verloren).";render();throw new Error("sessie verlopen")}
+}
+var GB="https://graph.microsoft.com/v1.0";
+async function gfetch(method,path,body,hdr,raw){
+ var url=path.indexOf("http")===0?path:GB+path;
+ for(var k=0;k<3;k++){
+  var h=Object.assign({Authorization:"Bearer "+await token()},hdr||{});
+  var init={method:method,headers:h};
+  if(body!==undefined){if(body instanceof Uint8Array||typeof body==="string"){init.body=body}else{h["Content-Type"]="application/json";init.body=JSON.stringify(body)}}
+  var r=await fetch(url,init);
+  if((r.status===429||r.status===503)&&k<2){await sleep(((+r.headers.get("Retry-After"))||2)*1000);continue}
+  if(!r.ok){var t="";try{t=(await r.json()).error.message}catch(e){}var er=new Error(method+" "+r.status+(t?": "+t:""));er.status=r.status;throw er}
+  if(raw)return r;
+  var ct=r.headers.get("content-type")||"";
+  return ct.indexOf("json")>-1?r.json():null;
+ }
+}
+var encPath=function(p){return p.split("/").filter(Boolean).map(encodeURIComponent).join("/")};
+var rp=function(p){return "/me/drive/root:/"+encPath(p)};
+async function getItem(path){return gfetch("GET",rp(path))}
+async function tryItem(path){try{return await getItem(path)}catch(e){if(e.status===404)return null;throw e}}
+async function listKids(path){
+ var out=[],u=path?rp(path)+":/children?$top=200":"/me/drive/root/children?$top=200";
+ while(u){var d=await gfetch("GET",u);out=out.concat(d.value||[]);u=d["@odata.nextLink"]||null}
+ return out;
+}
+async function dlBytes(item){
+ var u=item["@microsoft.graph.downloadUrl"];
+ if(!u){var it=await gfetch("GET","/me/drive/items/"+item.id);u=it["@microsoft.graph.downloadUrl"]}
+ var r=await fetch(u);if(!r.ok)throw new Error("downloaden mislukt ("+r.status+")");
+ return new Uint8Array(await r.arrayBuffer());
+}
+async function chunkPut(url,bytes){
+ var CH=3276800,pos=0,last=null;
+ while(pos<bytes.length){
+  var end=Math.min(pos+CH,bytes.length);
+  var r=await fetch(url,{method:"PUT",headers:{"Content-Range":"bytes "+pos+"-"+(end-1)+"/"+bytes.length},body:bytes.subarray(pos,end)});
+  if(!r.ok&&r.status!==202)throw new Error("uploaden mislukt ("+r.status+")");
+  last=r;pos=end;
+ }
+ return last;
+}
+async function uploadTo(base,bytes,ctype){
+ /* base: "/me/drive/items/ID" of "/me/drive/root:/pad/naam" */
+ var isItem=base.indexOf("/items/")>-1;
+ if(bytes.length<3500000)return gfetch("PUT",base+(isItem?"/content":":/content"),bytes,{"Content-Type":ctype||"application/octet-stream"});
+ var ses=await gfetch("POST",base+(isItem?"/createUploadSession":":/createUploadSession"),{item:{"@microsoft.graph.conflictBehavior":"replace"}});
+ return chunkPut(ses.uploadUrl,bytes);
+}
+function putText(path,text){return uploadTo(rp(path),new TextEncoder().encode(text),"text/plain")}
+async function ensureFolder(path){
+ var it=await tryItem(path);if(it)return it;
+ var parts=path.split("/"),cp="",par=null;
+ for(var k=0;k<parts.length;k++){
+  cp+=(k?"/":"")+parts[k];
+  var f=await tryItem(cp);
+  if(!f){if(!par)throw new Error("map niet gevonden: "+cp);f=await gfetch("POST","/me/drive/items/"+par.id+"/children",{name:parts[k],folder:{},"@microsoft.graph.conflictBehavior":"fail"})}
+  par=f;
+ }
+ return par;
+}
+async function liveBrowse(){
+ browse.data=null;render();
+ try{var kids=await listKids(browse.path);
+  browse.data={dirs:kids.filter(function(k){return k.folder}).map(function(k){return k.name}).sort(),files:kids.filter(function(k){return k.file&&/\.xls[xm]$/i.test(k.name)}).map(function(k){return k.name}).sort()}}
+ catch(e){browse.data={dirs:[],files:[],err:e.message}}
+ render();
+}
+
+/* ---- instellingen uit OneDrive ---- */
+async function loadLiveSettings(){
+ try{
+  var it=await tryItem(DBDIR+"/app_instellingen.json");
+  if(it){
+   var d=JSON.parse(new TextDecoder().decode(await dlBytes(it)));
+   if(d.projects)S.projects=d.projects;
+   if(d.special)S.special=Object.assign(defSpecial(),d.special);
+   if(d.mail)S.mail=d.mail;
+   if(typeof d.cc==="string")S.cc=d.cc;
+   if(typeof d.test==="boolean")S.test=d.test;
+   if(d.boxin)S.boxin=d.boxin;
+   S.stampImg=d.stampImg||"";S.stampRatio=d.stampRatio||0.43;
+   LIVE.sig=JSON.stringify(liveSettings());
+  }else{LIVE.sig=""}
+  LIVE.setLoaded=true;syncState="ok";
+  save();render();
+ }catch(e){syncState="err";LIVE.err="Instellingen ophalen mislukt: "+e.message;render()}
+}
+
+/* ---- csv ---- */
+function csvRows(t){
+ var rows=[],row=[],f="",q=false;t=t.replace(/^﻿/,"");
+ for(var k=0;k<t.length;k++){var c=t[k];
+  if(q){if(c==='"'){if(t[k+1]==='"'){f+='"';k++}else q=false}else f+=c}
+  else if(c==='"')q=true;
+  else if(c===","){row.push(f);f=""}
+  else if(c==="\n"){row.push(f);rows.push(row);row=[];f=""}
+  else if(c!=="\r")f+=c;
+ }
+ if(f!==""||row.length){row.push(f);rows.push(row)}
+ return rows;
+}
+function parseCsv(t){return csvRows(t).slice(1).filter(function(r){return r.length>6}).map(function(r){return {date:r[0],number:r[4],supplier:r[5],dest:r[6],file:r[2]||r[1]}})}
+var csvq=function(x){x=String(x==null?"":x);return /[",\n\r]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x};
+async function appendDb(rows){
+ var name=S.test?"facturen_database_TEST.csv":"facturen_database.csv",path=DBDIR+"/"+name;
+ var header="Datum verwerkt,Origineel bestand,Nieuw bestand,Factuurdatum,Factuurnummer,Leverancier,Bestemming,Opmerkingen";
+ var it=await tryItem(path),txt=header,bom=false;
+ if(it){var by=await dlBytes(it);bom=by[0]===0xEF&&by[1]===0xBB&&by[2]===0xBF;txt=new TextDecoder().decode(by).replace(/^﻿/,"")}
+ var eol=txt.indexOf("\r\n")>-1?"\r\n":"\n";
+ if(!/\n$/.test(txt))txt+=eol;
+ txt+=rows.map(function(r){return r.map(csvq).join(",")}).join(eol)+eol;
+ var enc=new TextEncoder().encode(txt);
+ if(bom){var o=new Uint8Array(enc.length+3);o.set([0xEF,0xBB,0xBF]);o.set(enc,3);enc=o}
+ await uploadTo(rp(path),enc,"text/csv");
+}
+
+/* ---- inlezen van box in ---- */
+function mkLive(id,f,x){
+ x=x||{};
+ var inv={id:id,itemId:f.id,live:true,orig:f.name,size:f.size,supplier:x.supplier||"",number:x.number||"",date:x.date||"",to:x.to||"",layout:"A",lines:[],real:true,
+  amount:x.amount!=null?x.amount:"",project:x.project||"",action:x.action||"process",own:!!x.own,
+  reason:x.reason||"Niet ingelezen door Claude: vul datum, nummer, leverancier en project zelf in.",conf:x.conf||"laag"};
+ if(inv.action==="private")inv.project="prive";
+ if(inv.action==="unknown")inv.project="onbekend";
+ var pr=projByName(inv.project);
+ inv.send=inv.action==="process"&&!inv.own&&!!pr&&inv.project!=="Man&Meer algemeen";inv.adm=inv.send;
+ var d=dupOf(inv);
+ if(d&&inv.action!=="keep"){inv.action="duplicate";inv.send=false;inv.adm=false;inv.reason="Let op: factuur is eerder verwerkt ("+d.date+"). "+inv.reason}
+ return inv;
+}
+async function liveScan(){
+ if(LIVE.busy)return;
+ LIVE.busy=true;LIVE.msg="Box in openen…";LIVE.err="";render();
+ try{
+  if(!LIVE.setLoaded)await loadLiveSettings();
+  var kids=await listKids(S.boxin);
+  var files=kids.filter(function(f){return f.file&&/\.pdf$/i.test(f.name)});
+  var info={},it=await tryItem(DBDIR+"/inlezing.json");
+  if(it){try{var j=JSON.parse(new TextDecoder().decode(await dlBytes(it)));(j.facturen||[]).forEach(function(x){info[String(x.orig).toLowerCase()]=x})}catch(e){}}
+  LIVE.msg="Database controleren…";render();
+  var dbit=await tryItem(DBDIR+"/facturen_database.csv");
+  S.db=dbit?parseCsv(new TextDecoder().decode(await dlBytes(dbit))):[];
+  S.invoices=[];pdfCache={};occ={};pdfData={};
+  for(var k=0;k<files.length;k++){
+   var f=files[k];LIVE.msg="Factuur "+(k+1)+" van "+files.length+" ophalen…";render();
+   var id="L"+k+"_"+f.id;pdfData[id]=await dlBytes(f);
+   var nm=f.name.toLowerCase().replace(/[^a-z0-9]/g,""),m=info[f.name.toLowerCase()];
+   if(!m)Object.keys(info).forEach(function(key){var n=String(info[key].number||"").toLowerCase().replace(/[^a-z0-9]/g,"");if(!m&&n.length>4&&nm.indexOf(n)>=0)m=info[key]});
+   S.invoices.push(mkLive(id,f,m));
+  }
+  S.scanned=true;S.done=false;S.result=null;S.cur=0;
+  if(!files.length)LIVE.err="De map bevat geen pdf's.";
+ }catch(e){LIVE.err="Inlezen mislukt: "+e.message}
+ LIVE.busy=false;LIVE.msg="";save();render();
+}
+
+/* ---- stempel en tekst in de pdf ---- */
+function loadPdfLib(){return window.PDFLib?Promise.resolve():loadScript("https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js")}
+function wrapText(text,font,size,maxW){
+ var out=[];
+ String(text).split(/\r?\n/).forEach(function(par){
+  var words=par.split(/\s+/).filter(Boolean),line="";
+  if(!words.length){out.push("");return}
+  words.forEach(function(w){var t=line?line+" "+w:w;if(!line||font.widthOfTextAtSize(t,size)<=maxW)line=t;else{out.push(line);line=w}});
+  out.push(line);
+ });
+ return out;
+}
+async function stampPdf(i){
+ await loadPdfLib();var P=window.PDFLib;
+ var doc=await P.PDFDocument.load(pdfData[i.id],{ignoreEncryption:true});
+ var page=doc.getPage(0);
+ if(page.getRotation().angle%360!==0)throw new Error("pagina 1 is gedraaid, stempelen niet mogelijk");
+ var mb=page.getMediaBox(),W=mb.width,H=mb.height,st=i.stamp||{x:64,y:2},sw=0.30*W,sx=mb.x+st.x/100*W;
+ var cyan=P.rgb(0,0.596,0.788),dark=P.rgb(0.08,0.14,0.17),white=P.rgb(1,1,1);
+ if(S.stampImg){
+  var bin=atob(S.stampImg.split(",")[1]),u=new Uint8Array(bin.length);for(var k=0;k<bin.length;k++)u[k]=bin.charCodeAt(k);
+  var img=/^data:image\/jpe?g/.test(S.stampImg)?await doc.embedJpg(u):await doc.embedPng(u);
+  var sh1=sw*(S.stampRatio||img.height/img.width);
+  page.drawImage(img,{x:sx,y:mb.y+H-st.y/100*H-sh1,width:sw,height:sh1});
+ }else{
+  var sh=sw*0.43,y0=mb.y+H-st.y/100*H-sh;
+  var fb=await doc.embedFont(P.StandardFonts.HelveticaBold),fr=await doc.embedFont(P.StandardFonts.Helvetica);
+  page.drawRectangle({x:sx,y:y0,width:sw,height:sh,color:white,opacity:0.55,borderColor:cyan,borderWidth:0.005*W});
+  var ts=0.03*W;while(fb.widthOfTextAtSize("GOEDGEKEURD",ts)>sw*0.86)ts*=0.95;
+  var ss=0.023*W,dt=i.approvedOn||todayDMY;
+  var cx=function(t,f,z){return sx+(sw-f.widthOfTextAtSize(t,z))/2};
+  page.drawText("GOEDGEKEURD",{x:cx("GOEDGEKEURD",fb,ts),y:y0+sh*0.64,size:ts,font:fb,color:cyan});
+  page.drawText("D. Visser",{x:cx("D. Visser",fr,ss),y:y0+sh*0.38,size:ss,font:fr,color:dark});
+  page.drawText(dt,{x:cx(dt,fr,ss),y:y0+sh*0.13,size:ss,font:fr,color:dark});
+ }
+ var nt=String(i.note||"").trim();
+ if(nt){
+  nt=nt.replace(/[\u2013\u2014]/g,"-").replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"').replace(/[^\x20-\x7E\xA0-\xFF€\n\r]/g,"?");
+  var nf=await doc.embedFont(P.StandardFonts.Helvetica),ns=0.024*W,nw=0.42*W,pd=0.014*W,lh=ns*1.3;
+  var lines=wrapText(nt,nf,ns,nw-2*pd),nh=lines.length*lh+2*pd;
+  var np=i.notePos||(i.stamp?{x:i.stamp.x,y:Math.min(i.stamp.y+11,88)}:{x:5,y:3});
+  var nx=mb.x+np.x/100*W,ny=mb.y+H-np.y/100*H-nh;
+  page.drawRectangle({x:nx,y:ny,width:nw,height:nh,color:white,opacity:0.7,borderColor:cyan,borderWidth:0.003*W,borderDashArray:[0.01*W,0.008*W]});
+  lines.forEach(function(l,k){page.drawText(l,{x:nx+pd,y:ny+nh-pd-ns*0.95-k*lh,size:ns,font:nf,color:dark})});
+ }
+ return await doc.save();
+}
+
+/* ---- mail ---- */
+function addrs(x){return String(x||"").split(/[,;\s]+/).filter(function(a){return /@/.test(a)}).map(function(a){return {emailAddress:{address:a}}})}
+function b64(u8){var s="",CH=0x8000;for(var k=0;k<u8.length;k+=CH)s+=String.fromCharCode.apply(null,u8.subarray(k,k+CH));return btoa(s)}
+async function sendMail(to,subject,body,fname,bytes){
+ var msg={subject:subject,body:{contentType:"Text",content:body},toRecipients:addrs(to)};
+ if(!msg.toRecipients.length)throw new Error("geen geldig mailadres bij het project");
+ if(S.cc&&addrs(S.cc).length)msg.ccRecipients=addrs(S.cc);
+ if(bytes.length<2500000){
+  msg.attachments=[{"@odata.type":"#microsoft.graph.fileAttachment",name:fname,contentType:"application/pdf",contentBytes:b64(bytes)}];
+  await gfetch("POST","/me/sendMail",{message:msg,saveToSentItems:true});return;
+ }
+ var d=await gfetch("POST","/me/messages",msg);
+ var ses=await gfetch("POST","/me/messages/"+d.id+"/attachments/createUploadSession",{AttachmentItem:{attachmentType:"file",name:fname,size:bytes.length,contentType:"application/pdf"}});
+ await chunkPut(ses.uploadUrl,bytes);
+ await gfetch("POST","/me/messages/"+d.id+"/send");
+}
+
+/* ---- alles uitvoeren (echt) ---- */
+async function liveRun(){
+ running=true;logLines=[];progress=0;S.step="finish";render();
+ var plan=planRows().filter(function(p){return !p.pending&&p.i.action!=="keep"}),res=[],dbRows=[],okSet={},n=0,testRoot=S.boxin+"/_test uitgevoerd";
+ var log=function(t){logLines.push(t);render()};
+ for(var k=0;k<plan.length;k++){
+  var p=plan[k],i=p.i,name=newName(i),row={file:name,supplier:i.supplier||"(onbekend)",number:i.number||"(onbekend)",kind:destOf(i),dest:"",mail:"",adm:false,ok:false,status:""},mailSent=false;
+  progress=Math.round(k/plan.length*100);
+  try{
+   log("("+(k+1)+"/"+plan.length+") "+i.orig+" → "+name);
+   var dpath=destFolder(i);
+   if(!dpath)throw new Error("geen mapadres ingevuld voor "+destOf(i));
+   var tfolder=S.test?testRoot+"/"+clean(destOf(i)):dpath,target;
+   if(S.test)target=await ensureFolder(tfolder);
+   else if(i.action!=="process")target=await ensureFolder(dpath);
+   else{target=await tryItem(dpath);if(!target||!target.folder)throw new Error("map niet gevonden: "+dpath)}
+   var bytes=pdfData[i.id],stamped=false;
+   if(i.action==="process"){log("Stempel plaatsen…");bytes=await stampPdf(i);stamped=true}
+   var pr=projByName(i.project);
+   if(p.acts.some(function(a){return /^Mail aan/.test(a)})){
+    var m=mailFor(i);log("Mail versturen aan "+pr.email+"…");
+    await sendMail(pr.email,m.subject,m.body,name,bytes);mailSent=true;row.mail=pr.email;
+   }
+   if(S.test){log("Kopie naar de testmap…");await uploadTo(rp(tfolder+"/"+name),bytes,"application/pdf")}
+   else{
+    if(stamped){log("Gestempelde pdf opslaan…");await uploadTo("/me/drive/items/"+i.itemId,bytes,"application/pdf")}
+    log("Hernoemen en verplaatsen…");
+    await gfetch("PATCH","/me/drive/items/"+i.itemId,{name:name,parentReference:{id:target.id},"@microsoft.graph.conflictBehavior":"rename"});
+   }
+   row.dest=tfolder;row.adm=!!(i.adm&&i.action==="process"&&p.acts.some(function(a){return /^Noteren/.test(a)}));row.ok=true;row.status="gelukt";okSet[i.id]=1;
+   if(i.action!=="duplicate")dbRows.push([todayISO,i.orig,name,i.date,i.number,i.supplier,destOf(i),(S.test?"TEST via app; ":"via app; ")+"uit map box in"+(row.adm?"; administratie bijwerken: voorstel nodig":"")+(i.note?"; extra tekst op factuur: "+i.note:"")]);
+  }catch(e){
+   row.status=mailSent?"Mail is verstuurd, maar bestand niet verplaatst: "+e.message:"MISLUKT, niet verwerkt: "+e.message;
+  }
+  res.push(row);
+ }
+ var dbErr="";
+ if(dbRows.length){try{log("Database bijwerken…");await appendDb(dbRows)}catch(e){dbErr="Database niet bijgewerkt: "+e.message}}
+ if(!S.test)S.invoices=S.invoices.filter(function(x){return !okSet[x.id]});
+ var errs=res.filter(function(r){return !r.ok}).length+(dbErr?1:0);
+ if(dbErr)res.push({file:"(database)",supplier:"",number:"",kind:"",dest:"",mail:"",adm:false,ok:false,status:dbErr});
+ S.cur=0;S.done=true;S.result={rows:res,left:S.invoices.length,date:todayDMY,live:true,test:S.test,errors:errs};
+ running=false;save();render();
+}
+
+render();initDb();msalInit();
+})();
+</script></body></html>
