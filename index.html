@@ -912,7 +912,7 @@ document.addEventListener("click",function(e){
  else if(a==="rmextra"){removeExtra(cur(),+v);save();render()}
  else if(a==="undo"){var i=cur();i.decided=false;i.stamp=null;save();render()}
  else if(a==="run"){if(S.invoices.some(function(x){return x.live})&&LIVE.on){if(!S.test&&!confirm("Dit hernoemt en verplaatst echt bestanden en verstuurt echte mails. Doorgaan?"))return;liveRun()}else run()}
- else if(a==="login"){LIVE.msal&&LIVE.msal.loginRedirect({scopes:SCOPES})}
+ else if(a==="login"){LIVE.msal&&LIVE.msal.loginRedirect({scopes:SCOPES,loginHint:"d.visser@manenmeer.nl",prompt:"select_account"})}
  else if(a==="logout"){LIVE.msal&&LIVE.msal.logoutRedirect({account:LIVE.acct,postLogoutRedirectUri:REDIRECT})}
  else if(a==="livescan")liveScan();
  else if(a==="reset"){var keep={projects:S.projects,special:S.special,mail:S.mail,cc:S.cc,stampImg:S.stampImg,stampRatio:S.stampRatio,test:S.test,boxin:S.boxin,db:S.db};S=fresh();if(LIVE.on)Object.keys(keep).forEach(function(k){S[k]=keep[k]});save();render();window.scrollTo(0,0)}
