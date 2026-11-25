@@ -150,7 +150,7 @@ var clean=function(s){return String(s||"").replace(/[\\\/:*?"<>|]/g,"-").replace
 var MAILBOX="d.visser@manenmeer.nl";
 var CLIENT_ID="a8a05d8e-da1c-46e1-b664-bf0687ee5e7d",TENANT_ID="8ddc5a0a-76ce-4a00-8a07-4b2c87e0a1c4";
 var REDIRECT="https://manenmeer.github.io/facturen/";
-var SCOPES=["User.Read","Files.ReadWrite","Mail.Send"];
+var SCOPES=["User.Read","Files.ReadWrite","Mail.Send","Mail.ReadWrite"];
 var ROOTAF="Man&Meer/Documenten/Man&meer facturen/af te handelen facturen";
 var DBDIR=ROOTAF+"/dbase facturen";
 var DEF_BOXIN=ROOTAF+"/box in test";
@@ -771,7 +771,7 @@ function vFinish(){
    if(a==="__noFolder"){issues++;return '<span class="tag warn">geen mapadres ingevuld: verplaatsen overgeslagen</span>'}
    if(a==="__noModel"){return '<span class="tag gray">geen model ingesteld: administratie niet bijgewerkt</span>'}
    return '<span class="sub" style="color:var(--ink)">• '+esc(a)+'</span>'}).join("");
-  var mp=(!p.pending&&p.acts.some(function(a){return /^Mail aan/.test(a)}))?(function(){var m=mailFor(i);return '<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--cyan-ink);font-weight:600;min-height:32px">Bekijk de mail</summary><div class="card" style="padding:12px;margin-top:6px"><div class="small"><b>Onderwerp:</b> '+esc(m.subject)+'<br><b>Bijlage:</b> '+esc(m.file)+'</div><pre style="white-space:pre-wrap;font:inherit;margin:8px 0 0">'+esc(m.body)+'</pre></div></details>'})():"";
+  var mp=(!p.pending&&p.acts.some(function(a){return /^Mail aan/.test(a)}))?(function(){var m=i.action==="reject"?Object.assign(rejectMail(i),{file:newName(i)}):mailFor(i);return '<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--cyan-ink);font-weight:600;min-height:32px">Bekijk de mail</summary><div class="card" style="padding:12px;margin-top:6px"><div class="small"><b>Onderwerp:</b> '+esc(m.subject)+'<br><b>Bijlage:</b> '+esc(m.file)+'</div><pre style="white-space:pre-wrap;font:inherit;margin:8px 0 0">'+esc(m.body)+'</pre></div></details>'})():"";
   return '<tr><td><b>'+(S.invoices.indexOf(i)+1)+'</b></td><td>'+esc(i.orig)+'<span class="sub">'+esc(destOf(i))+'</span></td><td>'+c+mp+'</td></tr>';
  }).join("");
  var nMail=plan.filter(function(p){return p.acts.some(function(a){return /^Mail aan/.test(a)})}).length;
@@ -1252,7 +1252,7 @@ async function sendMail(to,subject,body,fname,bytes,cc){
   msg.attachments=[{"@odata.type":"#microsoft.graph.fileAttachment",name:fname,contentType:"application/pdf",contentBytes:b64(bytes)}];
   await gfetch("POST","/me/sendMail",{message:msg,saveToSentItems:true});return;
  }
- var d=await gfetch("POST","/me/messages",msg);
+ var d;try{d=await gfetch("POST","/me/messages",msg)}catch(e0){if(/403|denied/i.test(String(e0.message)))throw new Error("grote pdf (boven 2,5 MB): de app mag nog geen conceptmail maken. Log uit en weer in en geef toestemming voor Mail.ReadWrite.");throw e0}
  var ses=await gfetch("POST","/me/messages/"+d.id+"/attachments/createUploadSession",{AttachmentItem:{attachmentType:"file",name:fname,size:bytes.length,contentType:"application/pdf"}});
  await chunkPut(ses.uploadUrl,bytes);
  await gfetch("POST","/me/messages/"+d.id+"/send");
