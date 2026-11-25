@@ -71,6 +71,12 @@ h1,h2,h3{margin:0;line-height:1.2}
 .chip.done{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
 .chip.dup{border-color:var(--bad);color:var(--bad)}
 .chip[aria-current="true"]{background:var(--cyan);border-color:var(--cyan);color:#fff}
+.wzch{display:grid;gap:10px;margin-top:12px}
+.btn.wz{width:100%;min-height:56px;text-align:left;font-size:17px;padding:12px 16px;line-height:1.3}
+.btn.wz.sel{border-color:var(--cyan);box-shadow:inset 0 0 0 2px var(--cyan)}
+.wzbar{height:6px;background:var(--line);border-radius:3px;margin-top:6px}
+.wzbar i{display:block;height:100%;background:var(--cyan);border-radius:3px}
+.wzbig{font-size:21px;font-weight:700;overflow-wrap:anywhere;margin:6px 0}
 .review{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
 @media (max-width:900px){.review{grid-template-columns:minmax(0,1fr)}}
 .desk{background:var(--desk);border-radius:12px;padding:16px;display:flex;justify-content:center}
@@ -500,15 +506,16 @@ function vStart(){
   '<div class="list">'+ren+'</div></div>';
 }
 
+function rejAddr(i){var p=projByName(i.project);if(!(i.rejectAddr&&p&&(p.addr||"").trim()))return "";return p.addr.trim()+((p.contact||"").trim()?"\nt.a.v. "+p.contact.trim():"")}
 function noteText(i){
- if(i.action==="reject")return i.decided&&(i.rejectReason||"").trim()?"Reden afkeuring: "+i.rejectReason.trim():"";
+ if(i.action==="reject")return i.decided&&(i.rejectReason||"").trim()?"Reden afkeuring: "+i.rejectReason.trim()+(rejAddr(i)?"\n\nJuiste factuuradres:\n"+rejAddr(i):""):"";
  return i.action==="process"?String(i.note||""):"";
 }
 function validMail(a){return /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(String(a||"").trim())}
 function rejectMail(i){
  var amt=(function(){var a=parseFloat(String(i.amount==null?"":i.amount).replace(",","."));return isNaN(a)?"":eur(a)})();
  var dat=i.date?i.date.slice(8,10)+"-"+i.date.slice(5,7)+"-"+i.date.slice(0,4):"";
- var body="Geachte heer/mevrouw,\n\nHierbij sturen wij u factuur "+(i.number||"(nummer onbekend)")+(dat?" van "+dat:"")+(amt?" (bedrag "+amt+" excl. btw)":"")+" retour, omdat wij deze niet kunnen accorderen.\n\nReden van afkeuring:\n"+String(i.rejectReason||"").trim()+"\n\nDe factuur zit als pdf bijgevoegd, voorzien van een stempel 'afgekeurd' en de reden. Wij ontvangen graag een gecorrigeerde factuur.\n\nMet vriendelijke groet,\n\nir. D.T.A. (David) Visser\nMan&Meer";
+ var body="Geachte heer/mevrouw,\n\nHierbij sturen wij u factuur "+(i.number||"(nummer onbekend)")+(dat?" van "+dat:"")+(amt?" (bedrag "+amt+" excl. btw)":"")+" retour, omdat wij deze niet kunnen accorderen.\n\nReden van afkeuring:\n"+String(i.rejectReason||"").trim()+(rejAddr(i)?"\n\nHet juiste factuuradres is:\n"+rejAddr(i):"")+"\n\nDe factuur zit als pdf bijgevoegd, voorzien van een stempel 'afgekeurd' en de reden. Wij ontvangen graag een gecorrigeerde factuur.\n\nMet vriendelijke groet,\n\nir. D.T.A. (David) Visser\nMan&Meer";
  return {subject:"Factuur "+(i.number||"")+" afgekeurd"+(i.supplier?" - "+i.supplier:""),body:body};
 }
 function rejectCard(i){
@@ -516,17 +523,171 @@ function rejectCard(i){
  return '<div class="card"><div class="lbl">Afkeuren</div>'+
   '<div class="field"><label for="f-rto">Terugsturen aan (afzender van de factuur)</label><input class="inp" id="f-rto" data-f="rejectTo" value="'+esc(i.rejectTo||"")+'" placeholder="mailadres van de leverancier" autocapitalize="off" autocorrect="off" inputmode="email">'+
   '<span class="small muted" style="display:block;margin-top:4px">'+(i.rejectTo?"Ingevuld op basis van de mail waarin de factuur binnenkwam. Controleer het even.":"Het afzenderadres is niet ingelezen. Vul het zelf in, of vraag Claude de afzender op te zoeken in je mailbox.")+'</span></div>'+
+  '<div class="field"><label for="f-rproj">Project / opdrachtgever (voor het juiste factuuradres)</label><select class="inp" id="f-rproj" data-f="project"><option value="">— kies een project —</option>'+S.projects.map(function(p){return '<option'+(p.name===i.project?" selected":"")+'>'+esc(p.name)+'</option>'}).join("")+'</select></div>'+
+  '<div class="field"><label for="f-rpre">Standaardreden (vult het vak hieronder in)</label><select class="inp" id="f-rpre" data-f="rejectPreset"><option value="">— kies een standaardreden —</option><option value="adres">Adressering klopt niet</option><option value="termijn">Termijn nog niet bereikt</option><option value="bedrag">Bedrag klopt niet</option><option value="po">Opdracht of ordernummer ontbreekt</option></select></div>'+
   '<div class="field"><label for="f-rre">Reden van afkeuring (komt op de factuur en in de mail)</label><textarea class="inp" id="f-rre" data-f="rejectReason" rows="4" placeholder="Bijvoorbeeld: termijn 3 is nog niet bereikt; graag creditnota en nieuwe factuur sturen">'+esc(i.rejectReason||"")+'</textarea></div>'+
+  '<label class="check"><input type="checkbox" data-f="rejectAddr"'+(i.rejectAddr?" checked":"")+'><span><b>Juiste factuuradres erbij zetten</b><span class="small muted" style="display:block">'+(function(){var p=projByName(i.project);return !i.project?"Kies eerst een project.":(p&&(p.addr||"").trim()?"Het adres van "+esc(i.project)+" komt in het kader op de factuur en in de mail.":"Bij Beheer is voor dit project nog geen factuuradres ingevuld. <a href=\"#\" data-act=\"go\" data-v=\"admin\">Invullen bij Beheer</a>")})()+'</span></span></label>'+
   (i.rejectErr?'<div class="alert warn small" style="margin-bottom:8px">'+esc(i.rejectErr)+'</div>':"")+
   (S.test&&LIVE.on?'<div class="alert info small" style="margin-bottom:8px">Testmodus: de mail gaat naar jezelf'+(own?' ('+esc(own)+')':'')+', niet naar de leverancier.</div>':"")+
   (decided(i)?'<div class="alert info small">Afgekeurd op '+esc(i.approvedOn)+'. De stempel en reden komen op de factuur bij Afronden. Sleep ze eventueel naar een betere plek.</div><div class="row" style="margin-top:8px"><button class="btn" data-act="undo">Afkeuring ongedaan maken</button></div>'
    :'<button class="btn danger" style="width:100%;font-size:18px" data-act="approve">✗ Afkeuren</button>')+
  '</div>';
 }
+
+/* ---------- vraag voor vraag beoordelen ---------- */
+var WZR={adres:"De adressering van de factuur klopt niet. Graag een nieuwe factuur sturen die op het juiste factuuradres is gericht.",termijn:"De termijn is nog niet bereikt. Graag een nieuwe factuur sturen zodra de termijn is bereikt.",bedrag:"Het bedrag op de factuur klopt niet. Graag een creditnota en een nieuwe factuur met het juiste bedrag sturen.",po:"Op de factuur ontbreekt het opdracht- of ordernummer. Graag een nieuwe factuur sturen met het juiste nummer."};
+function wzList(i){
+ if(i.wzRej)return ["rto","reden","radres","rbev"];
+ var l=["lev","nrdat","bedrag","soort"];
+ if(i.action==="process")l=l.concat(["project","dubbel","adres","inhoud","extra","tekst","door"]);
+ return l.concat(["besluit"]);
+}
+function wzId(i){var l=wzList(i);return l.indexOf(i.wz)>=0?i.wz:l[0]}
+function wzNext(i){var l=wzList(i),k=l.indexOf(wzId(i));i.wz=l[Math.min(l.length-1,k+1)];i.wzErr="";i.wzEdit=""}
+function wzPrev(i){var l=wzList(i),k=l.indexOf(wzId(i));i.wz=l[Math.max(0,k-1)];i.wzErr="";i.wzEdit=""}
+function wzBtn(op,arg,label,sub,cls){return '<button class="btn wz '+(cls||"")+'" data-act="wz" data-v="'+op+':'+esc(arg||"")+'"><b>'+label+'</b>'+(sub?'<span class="small" style="display:block;font-weight:400">'+sub+'</span>':'')+'</button>'}
+function wzQ(title,body,i){return '<div class="card"><h3 style="margin:0 0 6px">'+title+'</h3>'+body+(i.wzErr?'<div class="alert warn small" style="margin-top:10px">'+esc(i.wzErr)+'</div>':"")+'</div>'}
+function wzAmt(i){
+ var a=parseFloat(String(i.amount==null?"":i.amount).replace(",","."));
+ if(i.lines&&i.lines.length&&isNaN(a))a=i.lines.reduce(function(x,y){return x+y[1]},0);
+ return isNaN(a)?null:a;
+}
+function wzHtml(i){
+ var l=wzList(i),id=wzId(i),k=l.indexOf(id),pr=projByName(i.project),B="";
+ var last=S.cur===S.invoices.length-1;
+ var nav='<div class="nav"><button class="btn" data-act="prev"'+(S.cur===0?" disabled":"")+'>← Vorige factuur</button>'+(decided(i)?'<button class="btn primary" data-act="next">'+(last?"Naar afronden →":"Volgende factuur →")+'</button>':'<button class="btn primary" disabled title="Beantwoord eerst alle vragen">Volgende factuur →</button>')+'</div>';
+ if(decided(i)){
+  var what=i.mergedInto?"Dit bestand wordt achter een andere factuur gevoegd.":i.action==="reject"?"Afgekeurd. De factuur gaat met stempel en reden terug naar "+(i.rejectTo||"de afzender")+".":i.action==="process"?"Goedgekeurd voor "+i.project+".":i.action==="keep"?"De factuur blijft staan in box in.":"Vastgelegd: "+destOf(i)+".";
+  return '<div class="side"><div class="card"><div class="alert info">✓ '+esc(what)+' Je hebt alle vragen voor deze factuur beantwoord.</div><div class="row" style="margin-top:10px"><button class="btn" data-act="wz" data-v="redo:">Keuze wijzigen</button></div></div>'+nav+'</div>';
+ }
+ var head='<div class="card"><div class="small muted">Vraag '+(k+1)+' van '+l.length+(i.wzRej?" · afkeuren":"")+' · factuur '+(S.cur+1)+' van '+S.invoices.length+'</div><div class="wzbar"><i style="width:'+Math.round((k+1)/l.length*100)+'%"></i></div></div>';
+ var back=k>0?'<div class="row"><button class="btn" data-act="wz" data-v="back:">← Vorige vraag</button></div>':"";
+ var edit=i.wzEdit;
+ var fmtD=i.date?i.date.slice(8,10)+"-"+i.date.slice(5,7)+"-"+i.date.slice(0,4):"(niet ingevuld)";
+ var amt=wzAmt(i);
+ if(id==="lev"){
+  B=wzQ("Is de leverancier juist?",'<div class="wzbig">'+esc(i.supplier||"(niet ingelezen)")+'</div><div class="small muted">'+esc(i.reason||"")+'</div>'+
+   (edit==="lev"?'<div class="field" style="margin-top:10px"><label for="f-sup">Leverancier</label><input class="inp" id="f-sup" data-f="supplier" value="'+esc(i.supplier)+'"></div>':"")+
+   '<div class="wzch">'+wzBtn("ok","lev","Ja, klopt")+(edit==="lev"?"":wzBtn("edit","lev","Nee, aanpassen"))+'</div>',i);
+ }else if(id==="nrdat"){
+  B=wzQ("Kloppen factuurnummer en factuurdatum?",'<div class="wzbig">Nummer: '+esc(i.number||"(niet ingevuld)")+'<br>Datum: '+esc(fmtD)+'</div>'+
+   (edit==="nrdat"?'<div class="field"><label for="f-num">Factuurnummer</label><input class="inp" id="f-num" data-f="number" value="'+esc(i.number)+'"></div><div class="field"><label for="f-date">Factuurdatum</label><input class="inp" id="f-date" type="date" data-f="date" value="'+esc(i.date)+'"></div>':"")+
+   '<div class="wzch">'+wzBtn("ok","nrdat","Ja, klopt")+(edit==="nrdat"?"":wzBtn("edit","nrdat","Nee, aanpassen"))+'</div>',i);
+ }else if(id==="bedrag"){
+  B=wzQ("Klopt het bedrag (excl. btw)?",'<div class="wzbig">'+(amt==null?"(niet ingevuld)":esc(eur(amt)))+'</div><div class="small muted">Kijk op de factuur naar het bedrag exclusief btw.</div>'+
+   (edit==="bedrag"?'<div class="field" style="margin-top:10px"><label for="f-amt">Bedrag excl. btw</label><input class="inp" id="f-amt" data-f="amount" inputmode="decimal" value="'+esc(i.amount==null?"":i.amount)+'" placeholder="bijv. 7995,00"></div>':"")+
+   '<div class="wzch">'+wzBtn("ok","bedrag","Ja, klopt")+(edit==="bedrag"?"":wzBtn("edit","bedrag","Nee, aanpassen"))+wzBtn("nvt","bedrag","Er staat geen bedrag op of niet van toepassing")+'</div>',i);
+ }else if(id==="soort"){
+  var sel=function(v){return i.action===v?"sel":""};
+  B=wzQ("Wat voor factuur is dit?",'<div class="small muted">Voorstel: '+esc(i.reason||"")+'</div><div class="wzch">'+
+   wzBtn("soort","process","Zakelijke factuur voor een project of Man&Meer","wordt goedgekeurd en gearchiveerd",sel("process"))+
+   wzBtn("soort","private","Privé","buiten de administratie",sel("private"))+
+   wzBtn("soort","unknown","Onbekend","naar de map onbekend",sel("unknown"))+
+   wzBtn("soort","duplicate","Dubbel","naar de map dubbel",sel("duplicate"))+'</div>',i);
+ }else if(id==="project"){
+  var names=allDest().filter(function(n){return n!=="prive"&&n!=="onbekend"});
+  B=wzQ("Bij welk project hoort de factuur?",'<div class="wzch">'+names.map(function(n){return wzBtn("proj",n,esc(n),"",n===i.project?"sel":"")}).join("")+wzBtn("proj","__new","＋ Nieuw project aanmaken…")+'</div>',i);
+ }else if(id==="dubbel"){
+  var d=dupOf(i);
+  B=wzQ("Is deze factuur al eerder verwerkt?",(d?'<div class="alert bad">⚠ Gevonden in de database op '+esc(d.date)+' als “'+esc(d.file)+'” ('+esc(d.dest)+').</div>':'<div class="alert info">Niet gevonden in de database van verwerkte facturen.</div>')+
+   '<div class="wzch">'+wzBtn("ok","dubbel","Nee, het is geen dubbele factuur")+wzBtn("dup","ja","Ja, het is een dubbele factuur","naar de map dubbel")+'</div>',i);
+ }else if(id==="adres"){
+  var exp=pr&&(pr.addr||"").trim()?'<div class="alert info" style="white-space:pre-wrap">'+esc(pr.addr.trim()+((pr.contact||"").trim()?"\nt.a.v. "+pr.contact.trim():""))+'</div>':'<div class="alert warn small">Voor dit project is bij Beheer nog geen factuuradres ingevuld. Kijk zelf op de factuur wie de ontvanger is.</div>';
+  B=wzQ("Is de factuur juist geadresseerd?",'<div class="small muted">Verwachte adressering voor '+esc(i.project||"dit project")+':</div>'+exp+'<div class="small muted">Controleer op de factuur de naam van de opdrachtgever, het p/a-adres en de contactpersoon.</div><div class="wzch">'+wzBtn("ok","adres","Ja, de adressering klopt")+wzBtn("rej","adres","Nee, afkeuren","adressering klopt niet")+'</div>',i);
+ }else if(id==="inhoud"){
+  B=wzQ("Klopt de factuur inhoudelijk?",'<div class="small muted">Controleer omschrijving, termijn en bedrag'+(amt==null?"":" ("+esc(eur(amt))+" excl. btw)")+' met de opdracht.</div><div class="wzch">'+wzBtn("ok","inhoud","Ja, klopt")+wzBtn("rej","","Nee, afkeuren")+wzBtn("keep","","Weet ik nog niet","laat de factuur staan in box in")+'</div>',i);
+ }else if(id==="extra"){
+  var ex=(i.extra||[]).map(function(x,n){return '<div class="row small" style="justify-content:space-between;gap:8px;margin:4px 0"><span style="overflow-wrap:anywhere">📎 '+esc(x.name)+'</span><button class="btn" data-act="rmextra" data-v="'+n+'" aria-label="Verwijderen">✕</button></div>'}).join("");
+  var pick="";
+  if(edit==="extra"){
+   var o=S.invoices.map(function(v,n){return (v===i||v.mergedInto||!v.live)?"":'<option value="'+n+'">'+esc(v.orig)+'</option>'}).join("");
+   pick=(o?'<select class="inp" data-f="addbox" style="margin-top:6px"><option value="">＋ Voeg een bestand uit box in toe…</option>'+o+'</select>':"")+'<input class="inp" type="file" data-f="addfile" accept="application/pdf,image/jpeg,image/png" multiple style="margin-top:6px"><span class="small muted">Of kies een pdf of foto van dit apparaat. Ze komen na de factuur, als pagina 2 en verder.</span>';
+  }
+  B=wzQ("Moeten er stukken achter de factuur?",'<div class="small muted">Bijvoorbeeld een urenstaat, opdrachtbevestiging of foto.</div>'+ex+pick+'<div class="wzch">'+(edit==="extra"?wzBtn("ok","extra","Klaar, verder"):wzBtn("ok","extra","Nee, geen extra stukken")+wzBtn("edit","extra","Ja, stuk toevoegen"))+'</div>',i);
+ }else if(id==="tekst"){
+  B=wzQ("Moet er een extra tekst op de factuur komen?",'<div class="small muted">Bijvoorbeeld: akkoord t/m termijn 3.</div>'+(edit==="tekst"?'<div class="field" style="margin-top:8px"><textarea class="inp" id="f-note" data-f="note" rows="3" placeholder="Tekst op de factuur">'+esc(i.note||"")+'</textarea></div>':"")+'<div class="wzch">'+(edit==="tekst"?wzBtn("ok","tekst","Klaar, verder"):wzBtn("notext","","Nee, geen extra tekst")+wzBtn("edit","tekst","Ja, tekst toevoegen"))+'</div>',i);
+ }else if(id==="door"){
+  var canSend=!i.own&&i.project!=="Man&Meer algemeen"&&pr;
+  if(!canSend)B=wzQ("Doorsturen naar de administratie",'<div class="alert info small">'+(i.own?"Dit is een eigen factuur van Man&Meer: die wordt niet doorgestuurd.":i.project==="Man&Meer algemeen"?"Voor Man&Meer algemeen is geen administratie om naar door te sturen.":"Voor dit project is geen administratie.")+'</div><div class="wzch">'+wzBtn("door","none","Verder")+'</div>',i);
+  else B=wzQ("Wat moet er na goedkeuring gebeuren?",(pr.email?'<div class="small muted">Administratie: '+esc(pr.email)+'</div>':'<div class="alert warn small">Voor dit project is nog geen e-mailadres ingevuld. <a href="#" data-act="go" data-v="admin">Invullen bij Beheer</a></div>')+
+   '<div class="field" style="margin-top:8px"><label for="f-cc">Extra kopie (cc) bij deze mail</label><input class="inp" id="f-cc" data-f="cc" value="'+esc(ccFor(i))+'" placeholder="geen" autocapitalize="off" autocorrect="off"></div>'+
+   '<div class="wzch">'+wzBtn("door","both","Doorsturen naar administratie én model bijwerken","",i.send&&i.adm?"sel":"")+wzBtn("door","send","Alleen doorsturen naar administratie","",i.send&&!i.adm?"sel":"")+wzBtn("door","none","Niet doorsturen","",!i.send?"sel":"")+'</div>',i);
+ }else if(id==="besluit"){
+  var sum=[["Leverancier",i.supplier],["Nummer",i.number],["Datum",fmtD],["Bedrag",amt==null?"(niet ingevuld)":eur(amt)],["Bestemming",destOf(i)]];
+  if(i.action==="process"){sum.push(["Extra stukken",(i.extra||[]).length?i.extra.map(extraName).join(", "):"geen"]);sum.push(["Extra tekst",(i.note||"").trim()||"geen"]);sum.push(["Doorsturen",i.send?"naar administratie"+(i.adm?" en model bijwerken":""):"niet"])}
+  B=wzQ("Wat is je besluit?",'<div class="small" style="margin:6px 0">'+sum.map(function(r){return '<div><span class="muted">'+r[0]+':</span> <b>'+esc(r[1]||"")+'</b></div>'}).join("")+'</div><div class="wzch">'+
+   (i.action==="process"?wzBtn("approve","","✓ Goedkeuren","stempel en archiveren","ok"):wzBtn("approve","","✓ Vastleggen","naar: "+esc(destOf(i)),"ok"))+wzBtn("rej","","✗ Afkeuren","terugsturen aan de leverancier")+wzBtn("keep","","Laten staan in box in")+'</div>',i);
+ }else if(id==="rto"){
+  var own=String((LIVE.acct&&LIVE.acct.username)||"");
+  B=wzQ("Naar wie sturen we de afgekeurde factuur terug?",'<div class="small muted">Het adres van de afzender van de factuur'+(i.rejectTo?" (ingelezen uit je mailbox)":" (niet ingelezen; vul het zelf in)")+'.</div><div class="field" style="margin-top:8px"><input class="inp" id="f-rto" data-f="rejectTo" value="'+esc(i.rejectTo||"")+'" placeholder="mailadres van de leverancier" autocapitalize="off" autocorrect="off" inputmode="email"></div>'+(S.test&&LIVE.on?'<div class="alert info small">Testmodus: de mail gaat naar jezelf'+(own?" ("+esc(own)+")":"")+'.</div>':"")+
+   '<div class="wzch">'+wzBtn("rok","","Dit adres klopt, verder")+wzBtn("unrej","","Toch niet afkeuren")+'</div>',i);
+ }else if(id==="reden"){
+  var has=(i.rejectReason||"").trim()||edit==="reden";
+  B=wzQ("Wat is de reden van afkeuring?",'<div class="wzch">'+wzBtn("preset","adres","Adressering klopt niet")+wzBtn("preset","termijn","Termijn nog niet bereikt")+wzBtn("preset","bedrag","Bedrag klopt niet")+wzBtn("preset","po","Opdracht- of ordernummer ontbreekt")+wzBtn("preset","eigen","Andere reden, ik typ het zelf")+'</div>'+
+   (has?'<div class="field" style="margin-top:12px"><label for="f-rre">Reden (komt op de factuur en in de mail)</label><textarea class="inp" id="f-rre" data-f="rejectReason" rows="4">'+esc(i.rejectReason||"")+'</textarea></div><div class="wzch">'+wzBtn("rrok","","Reden klopt, verder")+'</div>':""),i);
+ }else if(id==="radres"){
+  var rp=projByName(i.project);
+  var ch=!i.project?'<div class="small muted">Kies eerst de opdrachtgever:</div><div class="wzch">'+S.projects.map(function(p){return wzBtn("rproj",p.name,esc(p.name))}).join("")+'</div>':
+   (rp&&(rp.addr||"").trim()?'<div class="alert info" style="white-space:pre-wrap">'+esc(rp.addr.trim()+((rp.contact||"").trim()?"\nt.a.v. "+rp.contact.trim():""))+'</div>':'<div class="alert warn small">Bij Beheer is voor '+esc(i.project)+' nog geen factuuradres ingevuld. <a href="#" data-act="go" data-v="admin">Invullen bij Beheer</a></div>')+'<div class="wzch">'+wzBtn("raddr","ja","Ja, zet dit adres op de factuur en in de mail")+wzBtn("raddr","nee","Nee, zonder adres")+'</div>';
+  B=wzQ("Het juiste factuuradres erbij zetten?",ch,i);
+ }else if(id==="rbev"){
+  B=wzQ("Afkeuren en terugsturen?",'<div class="small" style="margin:6px 0"><div><span class="muted">Terug aan:</span> <b>'+esc(i.rejectTo||"")+'</b></div><div><span class="muted">Reden:</span> <b>'+esc(i.rejectReason||"")+'</b></div><div><span class="muted">Juiste adres erbij:</span> <b>'+(rejAddr(i)?"ja":"nee")+'</b></div></div><div class="wzch">'+wzBtn("rdo","","✗ Afkeuren vastleggen","stempel AFGEKEURD en reden komen op de factuur; bij Afronden gaat de mail weg","ok")+wzBtn("unrej","","Toch niet afkeuren")+'</div>',i);
+ }
+ return '<div class="side">'+head+B+back+nav+'</div>';
+}
+function wzSetAction(i,v){
+ i.action=v;i.decided=false;i.stamp=null;
+ if(v==="private"){i.project="prive";i.send=false;i.adm=false}
+ else if(v==="unknown"){i.project="onbekend";i.send=false;i.adm=false}
+ else if(v==="duplicate"){i.send=false;i.adm=false}
+ else if(v==="process"&&(i.project==="prive"||i.project==="onbekend"||i.project==="__new"))i.project="";
+}
+function wzClick(v){
+ var i=cur(),p=v.indexOf(":"),op=v.slice(0,p),arg=v.slice(p+1);i.wzErr="";
+ if(op==="back"){wzPrev(i)}
+ else if(op==="edit"){i.wzEdit=arg}
+ else if(op==="ok"){
+  if(arg==="lev"&&!(i.supplier||"").trim())i.wzErr="Vul de leverancier in.";
+  else if(arg==="nrdat"&&(!(i.number||"").trim()||!/^\d{4}-\d{2}-\d{2}$/.test(i.date||"")))i.wzErr="Vul het factuurnummer en een geldige factuurdatum in.";
+  else if(arg==="bedrag"&&wzAmt(i)==null)i.wzErr="Vul het bedrag in, of kies: er staat geen bedrag op.";
+  else wzNext(i);
+ }
+ else if(op==="nvt"){wzNext(i)}
+ else if(op==="soort"){wzSetAction(i,arg);wzNext(i)}
+ else if(op==="proj"){
+  if(arg==="__new"){i.project="__new";modal={}}
+  else{i.project=arg;i.decided=false;i.stamp=null;var pp=projByName(arg);if(pp&&!i.own&&arg!=="Man&Meer algemeen"){i.send=true;i.adm=true}else{i.send=false;i.adm=false}wzNext(i)}
+ }
+ else if(op==="dup"){wzSetAction(i,"duplicate");i.wz="besluit"}
+ else if(op==="notext"){i.note="";wzNext(i)}
+ else if(op==="door"){if(arg==="both"){i.send=true;i.adm=true}else if(arg==="send"){i.send=true;i.adm=false}else{i.send=false;i.adm=false}wzNext(i)}
+ else if(op==="approve"){
+  if(i.action==="process"&&!i.project){i.wzErr="Kies eerst een project.";i.wz="project"}
+  else{approve();return}
+ }
+ else if(op==="keep"){i.action="keep";i.decided=true;i.stamp=null;save();if(S.cur<S.invoices.length-1){S.cur++}else{S.step="finish"}render();window.scrollTo(0,0);return}
+ else if(op==="rej"){
+  i.wzRej=true;i.wzFrom=wzId(i);i.wz="rto";i.wzEdit="";
+  if(arg&&WZR[arg]){i.rejectReason=WZR[arg];i.rejectAddr=(arg==="adres")}
+ }
+ else if(op==="unrej"){i.wzRej=false;if(i.action==="reject")i.action="process";i.decided=false;i.stamp=null;i.wz=i.wzFrom||"besluit";i.wzEdit=""}
+ else if(op==="rok"){if(!validMail(i.rejectTo))i.wzErr="Vul een geldig mailadres in.";else wzNext(i)}
+ else if(op==="preset"){if(arg==="eigen"){i.wzEdit="reden"}else{i.rejectReason=WZR[arg];if(arg==="adres")i.rejectAddr=true}}
+ else if(op==="rrok"){if(!(i.rejectReason||"").trim())i.wzErr="Vul de reden in.";else wzNext(i)}
+ else if(op==="rproj"){i.project=arg}
+ else if(op==="raddr"){
+  if(arg==="ja"){var rp=projByName(i.project);if(!(rp&&(rp.addr||"").trim())){i.wzErr="Vul eerst bij Beheer het factuuradres van dit project in.";save();render();return}i.rejectAddr=true}else i.rejectAddr=false;
+  wzNext(i)
+ }
+ else if(op==="rdo"){i.action="reject";approve();if(i.rejectErr){i.wz=/mailadres/.test(i.rejectErr)?"rto":"reden"}return}
+ else if(op==="redo"){i.decided=false;i.stamp=null;i.wz=i.wzRej?"rbev":"besluit"}
+ save();render();
+}
 function vReview(){
  if(!S.scanned)return '<div class="card">Lees eerst de facturen in bij stap 1.</div>';
  var i=cur(),d=dupOf(i),pr=projByName(i.project);
- var chips=S.invoices.map(function(x,k){var c="chip"+(decided(x)?" done":(dupOf(x)?" dup":""));return '<button class="'+c+'" data-act="open" data-v="'+k+'"'+(k===S.cur?' aria-current="true"':"")+' aria-label="Factuur '+(k+1)+'">'+(k+1)+'</button>'}).join("");
+ var fu=S.invoices.map(function(x){return decided(x)}).indexOf(false);if(fu<0)fu=S.invoices.length;
+ var chips=S.invoices.map(function(x,k){var c="chip"+(decided(x)?" done":(dupOf(x)?" dup":""));return '<button class="'+c+'" data-act="open" data-v="'+k+'"'+(S.wizard!==false&&!decided(x)&&k>fu?" disabled":"")+(k===S.cur?' aria-current="true"':"")+' aria-label="Factuur '+(k+1)+'">'+(k+1)+'</button>'}).join("");
  var actions=[["process","Goedkeuren en archiveren"],["private","Privé (buiten administratie)"],["duplicate","Dubbel (naar map dubbel)"],["reject","Afkeuren en terugsturen aan leverancier"],["unknown","Onbekend (naar map onbekend)"],["keep","Laten staan in box in"]];
  var projOpts=allDest().filter(function(n){return n!=="prive"&&n!=="onbekend"}).map(function(n){return '<option'+(n===i.project?" selected":"")+'>'+esc(n)+'</option>'}).join("");
  var needProj=i.action==="process"&&!i.project;
@@ -560,6 +721,7 @@ function vReview(){
   '<div class="card">'+(decided(i)?'<div class="alert info small">'+(i.mergedInto?"Dit bestand wordt achter een andere factuur gevoegd.":"Keuze vastgelegd: "+esc(destOf(i)))+'</div><div class="row" style="margin-top:8px"><button class="btn" data-act="undo">Keuze wijzigen</button></div>':'<button class="btn primary" style="width:100%" data-act="approve">Keuze vastleggen</button>')+'</div>')+
  (decided(i)?"":'<div class="card"><button class="btn" style="width:100%" data-act="skip">Overslaan: laat deze factuur staan in box in</button></div>')+
  '<div class="nav"><button class="btn" data-act="prev"'+(S.cur===0?" disabled":"")+'>← Vorige</button><button class="btn primary" data-act="next">'+(S.cur===S.invoices.length-1?"Naar afronden →":"Volgende →")+'</button></div></div>';
+ if(S.wizard!==false)side=wzHtml(i);
  return '<div class="chips" aria-label="Facturen">'+chips+'</div>'+
   '<div class="review"><div><div class="muted small" style="margin-bottom:6px">Factuur '+(S.cur+1)+' van '+S.invoices.length+' · origineel: '+esc(i.orig)+'</div><div class="desk"><div class="pagewrap">'+paper(i)+'</div></div></div>'+side+'</div>';
 }
@@ -620,6 +782,8 @@ function vAdmin(){
   return '<div class="card"><div class="row" style="justify-content:space-between"><h3>'+esc(p.name)+'</h3><button class="btn danger" data-act="delproj" data-v="'+k+'" aria-label="Project verwijderen">Verwijderen</button></div>'+
   '<div class="field" style="margin-top:12px"><label for="p'+k+'e">E-mailadres administratie</label><input class="inp" id="p'+k+'e" data-p="'+k+'" data-pf="email" type="email" value="'+esc(p.email)+'" placeholder="nog niet ingevuld"></div>'+
   '<div class="field"><label for="p'+k+'c">Standaard cc bij mail naar administratie (mag leeg)</label><input class="inp" id="p'+k+'c" data-p="'+k+'" data-pf="cc" value="'+esc(p.cc||"")+'" placeholder="geen" autocapitalize="off"></div>'+
+  '<div class="field"><label for="p'+k+'a">Juiste factuuradres (adressering van de opdrachtgever; voor het afkeuren van facturen)</label><textarea class="inp" id="p'+k+'a" data-p="'+k+'" data-pf="addr" rows="3" placeholder="Bijvoorbeeld:\nNaam opdrachtgever B.V.\nStraat 1\n1234 AB Plaats">'+esc(p.addr||"")+'</textarea></div>'+
+  '<div class="field"><label for="p'+k+'t">Contactpersoon bij de opdrachtgever (komt als "t.a.v." onder het adres; mag leeg)</label><input class="inp" id="p'+k+'t" data-p="'+k+'" data-pf="contact" value="'+esc(p.contact||"")+'" placeholder="geen"></div>'+
   '<div class="field"><label for="p'+k+'f">Mapadres facturen</label><div class="pathrow"><input class="inp" id="p'+k+'f" data-p="'+k+'" data-pf="folder" value="'+esc(p.folder)+'" placeholder="nog niet ingevuld"><button class="btn" data-act="browse" data-v="'+k+':folder">Bladeren…</button></div></div>'+
   '<div class="field"><label for="p'+k+'m">Model (CAPEX)</label><div class="pathrow"><input class="inp" id="p'+k+'m" data-p="'+k+'" data-pf="model" value="'+esc(p.model)+'" placeholder="geen model"><button class="btn" data-act="browse" data-v="'+k+':model">Bladeren…</button></div></div></div>';
  }).join("");
@@ -640,6 +804,7 @@ function vAdmin(){
  '<div class="card"><h3>Vaste mappen</h3><p class="muted small">Waar facturen heen gaan die bij geen project horen. Deze adressen kun je hier wijzigen.</p>'+sp+'</div>'+
  '<div class="card"><h3>Werkwijze</h3>'+(LIVE.on?
   '<p class="muted small">Ingelogd als <b>'+esc(LIVE.acct.username||"")+'</b>.</p>'+
+  '<label class="check"><input type="checkbox" data-g="wizard"'+(S.wizard!==false?' checked':'')+'><span><b>Vraag voor vraag beoordelen</b><span class="small muted" style="display:block">Aan (aanbevolen): bij elke factuur stelt de app je één voor één de controlevragen en kun je pas naar de volgende factuur als alles is bekeken.</span></span></label>'+
   '<label class="check"><input type="checkbox" data-g="test"'+(S.test?' checked':'')+'><span><b>Testmodus</b><span class="small muted" style="display:block">Aan: je originelen blijven in box in; kopieën komen in de map _test uitgevoerd en de regels in facturen_database_TEST.csv. Mails worden wel echt verstuurd. Uit: de app verplaatst en hernoemt echt.</span></span></label>'+
   '<div class="field" style="margin-top:10px"><label for="boxin">Map met te verwerken facturen (box in)</label><div class="pathrow"><input class="inp" id="boxin" data-g="boxin" value="'+esc(S.boxin)+'"><button class="btn" data-act="browse" data-v="b:boxin">Bladeren…</button></div></div>'+
   '<div class="row"><button class="btn" data-act="logout">Uitloggen</button></div>'
@@ -706,6 +871,7 @@ function approve(){
   i.rejectErr="";
   if(!(i.rejectReason||"").trim())i.rejectErr="Vul eerst de reden van afkeuring in.";
   else if(!validMail(i.rejectTo))i.rejectErr="Vul een geldig mailadres in van de afzender van de factuur.";
+  else if(i.rejectAddr&&!rejAddr(i))i.rejectErr=!i.project?"Kies eerst een project, of haal het vinkje bij het factuuradres weg.":"Voor dit project is bij Beheer nog geen factuuradres ingevuld.";
   if(i.rejectErr){save();render();return}
   i.send=false;i.adm=false;
  }
@@ -720,6 +886,7 @@ document.addEventListener("click",function(e){
  if(running)return;
  if(a==="go"){S.step=v;save();render();window.scrollTo(0,0)}
  else if(a==="scan"){t.disabled=true;t.textContent="Bezig met inlezen…";setTimeout(function(){S.invoices=demoInvoices();S.scanned=true;S.done=false;S.result=null;save();render()},900)}
+ else if(a==="wz"){wzClick(v)}
  else if(a==="open"){S.cur=+v;save();render()}
  else if(a==="prev"){S.cur=Math.max(0,S.cur-1);save();render();window.scrollTo(0,0)}
  else if(a==="next"){if(S.cur<S.invoices.length-1){S.cur++}else{S.step="finish"}save();render();window.scrollTo(0,0)}
@@ -767,6 +934,7 @@ document.addEventListener("change",function(e){
    im.src=String(fr.result)};fr.readAsDataURL(t.files[0]);return}
  if(t.id==="pdfin"&&t.files&&t.files.length){addPdfs(t.files);t.value="";return}
  if(t.getAttribute&&t.getAttribute("data-g")==="test"){S.test=t.checked;save();render();return}
+ if(t.getAttribute&&t.getAttribute("data-g")==="wizard"){S.wizard=t.checked;save();render();return}
  var f=t.getAttribute&&t.getAttribute("data-f");
  if(f==="cc"){var cc1=cur();cc1.cc=t.value;cc1.ccSet=true;save();return}
  if(f==="rejectTo"||f==="rejectReason"){cur()[f]=t.value;save();return}
@@ -778,6 +946,8 @@ document.addEventListener("change",function(e){
   if(f==="note"){i.note=t.value;save();updNote(i);return}
   if(f==="project"&&t.value==="__new"){i.project="__new";modal={};render();return}
   if(f==="send"||f==="adm")i[f]=t.checked;
+  else if(f==="rejectAddr"){i[f]=t.checked}
+  else if(f==="rejectPreset"){var R={adres:"De adressering van de factuur klopt niet. Graag een nieuwe factuur sturen die op het juiste factuuradres is gericht.",termijn:"De termijn is nog niet bereikt. Graag een nieuwe factuur sturen zodra de termijn is bereikt.",bedrag:"Het bedrag op de factuur klopt niet. Graag een creditnota en een nieuwe factuur met het juiste bedrag sturen.",po:"Op de factuur ontbreekt het opdracht- of ordernummer. Graag een nieuwe factuur sturen met het juiste nummer."};if(R[t.value]){i.rejectReason=R[t.value];if(t.value==="adres")i.rejectAddr=true}}
   else if(f==="action"){
    i.action=t.value;i.decided=false;i.stamp=null;
    if(t.value==="private"){i.project="prive";i.send=false;i.adm=false}
@@ -922,7 +1092,7 @@ async function loadLiveSettings(){
   var it=await tryItem(DBDIR+"/app_instellingen.json");
   if(it){
    var d=JSON.parse(new TextDecoder().decode(await dlBytes(it)));
-   if(d.projects)S.projects=d.projects;
+   if(d.projects){S.projects=d.projects;var DA={dordrecht:"DOM Vastgoed BV\np/a Vinken Vastgoed BV\nOverschiestraat 180\n1062 XK Amsterdam",maastricht:"Wolfstraat Vastgoed B.V.\nLingedijk 6\n4247 EE Kedichem"};S.projects.forEach(function(p){if(!(p.addr||"").trim()){var n=(p.name||"").toLowerCase();for(var k in DA)if(n.indexOf(k)===0)p.addr=DA[k]}})}
    if(d.special)S.special=Object.assign(defSpecial(),d.special);
    if(d.mail)S.mail=d.mail;
    if(typeof d.cc==="string")S.cc=d.cc;
@@ -972,7 +1142,7 @@ function mkLive(id,f,x){
   reason:x.reason||"Niet ingelezen door Claude: vul datum, nummer, leverancier en project zelf in.",conf:x.conf||"laag"};
  if(inv.action==="private")inv.project="prive";
  if(inv.action==="unknown")inv.project="onbekend";
- if(inv.action==="reject")inv.project="";
+ if(inv.action==="reject")inv.project=inv.project||"";
  var pr=projByName(inv.project);
  inv.send=inv.action==="process"&&!inv.own&&!!pr&&inv.project!=="Man&Meer algemeen";inv.adm=inv.send;
  var d=dupOf(inv);
