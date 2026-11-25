@@ -224,7 +224,7 @@ function demoInvoices(){
 /* ---------- toestand ---------- */
 var S;
 var BASE=ROOTAF+"/";
-function defSpecial(){return {"Man&Meer algemeen":BASE+"Man&Meer algemeen","prive":BASE+"prive","onbekend":BASE+"onbekend","dubbel":BASE+"dubbel","afgekeurd":BASE+"afgekeurd"}}
+function defSpecial(){return {"Man&Meer algemeen":BASE+"Man&Meer algemeen","prive":BASE+"prive","onbekend":BASE+"onbekend","dubbel":BASE+"dubbel","afgekeurd":BASE+"afgekeurd","betalen":BASE+"nog te betalen facturen"}}
 function defMail(){return {subject:"Factuur {leverancier} {nummer} - {project}",body:"Beste administratie,\n\nHierbij ter verwerking een goedgekeurde factuur voor het project {project}.\n\nLeverancier: {leverancier}\nFactuurnummer: {nummer}\nFactuurdatum: {datum}\nBedrag: {bedrag} excl. btw\nGoedgekeurd door David Visser op {goedgekeurd}\n\nDe factuur zit als pdf bijgevoegd.\n\nMet vriendelijke groet,\n\nir. D.T.A. (David) Visser\nMan&Meer"}}
 function fresh(){return {stampRatio:0.43,mail:defMail(),special:defSpecial(),step:"start",scanned:false,cur:0,invoices:[],projects:JSON.parse(JSON.stringify(DEF_PROJECTS)),db:JSON.parse(JSON.stringify(DEF_DB)),stampImg:"",cc:"",test:true,boxin:DEF_BOXIN,done:false,result:null}}
 function load(){try{var r=localStorage.getItem("fa-state-v2");if(r){var o=JSON.parse(r);if(o&&o.projects){if(!o.special)o.special=defSpecial();if(!o.mail)o.mail=defMail();if(!o.stampRatio)o.stampRatio=0.43;if(o.cc===MAILBOX)o.cc="";if(o.test===undefined)o.test=true;if(!o.boxin)o.boxin=DEF_BOXIN;var n0=(o.invoices||[]).length;o.invoices=(o.invoices||[]).filter(function(x){return !x.real});if(n0&&!o.invoices.length){o.scanned=false;o.step="start";o.cur=0}return o}}}catch(e){}return fresh()}
@@ -539,7 +539,8 @@ var WZR={adres:"De adressering van de factuur klopt niet. Graag een nieuwe factu
 function wzList(i){
  if(i.wzRej)return ["rto","reden","radres","rbev"];
  var l=["lev","nrdat","bedrag","soort"];
- if(i.action==="process")l=l.concat(["project","dubbel","adres","inhoud","extra","tekst","door"]);
+ if(i.action==="private")l.push("betalen");
+ if(i.action==="process"){l.push("project");if(i.project==="Man&Meer algemeen")l.push("betalen");l=l.concat(["dubbel","adres","inhoud","extra","tekst","door"])}
  return l.concat(["besluit"]);
 }
 function wzId(i){var l=wzList(i);return l.indexOf(i.wz)>=0?i.wz:l[0]}
@@ -584,6 +585,8 @@ function wzHtml(i){
    wzBtn("soort","private","Privé","buiten de administratie",sel("private"))+
    wzBtn("soort","unknown","Onbekend","naar de map onbekend",sel("unknown"))+
    wzBtn("soort","duplicate","Dubbel","naar de map dubbel",sel("duplicate"))+'</div>',i);
+ }else if(id==="betalen"){
+  B=wzQ("Moet je deze factuur zelf nog betalen?",'<div class="small muted">Bij ja komt er een kopie in de map “nog te betalen facturen”.</div><div class="wzch">'+wzBtn("pay","ja","Ja, door mij te betalen","",i.pay===true?"sel":"")+wzBtn("pay","nee","Nee, hoeft niet betaald te worden of is al betaald","",i.pay===false?"sel":"")+'</div>',i);
  }else if(id==="project"){
   var names=allDest().filter(function(n){return n!=="prive"&&n!=="onbekend"});
   B=wzQ("Bij welk project hoort de factuur?",'<div class="wzch">'+names.map(function(n){return wzBtn("proj",n,esc(n),"",n===i.project?"sel":"")}).join("")+wzBtn("proj","__new","＋ Nieuw project aanmaken…")+'</div>',i);
@@ -614,6 +617,7 @@ function wzHtml(i){
    '<div class="wzch">'+wzBtn("door","both","Doorsturen naar administratie én model bijwerken","",i.send&&i.adm?"sel":"")+wzBtn("door","send","Alleen doorsturen naar administratie","",i.send&&!i.adm?"sel":"")+wzBtn("door","none","Niet doorsturen","",!i.send?"sel":"")+'</div>',i);
  }else if(id==="besluit"){
   var sum=[["Leverancier",i.supplier],["Nummer",i.number],["Datum",fmtD],["Bedrag",amt==null?"(niet ingevuld)":eur(amt)],["Bestemming",destOf(i)]];
+  if(i.action==="private"||(i.action==="process"&&i.project==="Man&Meer algemeen"))sum.push(["Door mij te betalen",i.pay?"ja, kopie in nog te betalen facturen":"nee"]);
   if(i.action==="process"){sum.push(["Extra stukken",(i.extra||[]).length?i.extra.map(extraName).join(", "):"geen"]);sum.push(["Extra tekst",(i.note||"").trim()||"geen"]);sum.push(["Doorsturen",i.send?"naar administratie"+(i.adm?" en model bijwerken":""):"niet"])}
   B=wzQ("Wat is je besluit?",'<div class="small" style="margin:6px 0">'+sum.map(function(r){return '<div><span class="muted">'+r[0]+':</span> <b>'+esc(r[1]||"")+'</b></div>'}).join("")+'</div><div class="wzch">'+
    (i.action==="process"?wzBtn("approve","","✓ Goedkeuren","stempel en archiveren","ok"):wzBtn("approve","","✓ Vastleggen","naar: "+esc(destOf(i)),"ok"))+wzBtn("rej","","✗ Afkeuren","terugsturen aan de leverancier")+wzBtn("keep","","Laten staan in box in")+'</div>',i);
@@ -653,6 +657,7 @@ function wzClick(v){
   else wzNext(i);
  }
  else if(op==="nvt"){wzNext(i)}
+ else if(op==="pay"){i.pay=(arg==="ja");wzNext(i)}
  else if(op==="soort"){wzSetAction(i,arg);wzNext(i)}
  else if(op==="proj"){
   if(arg==="__new"){i.project="__new";modal={}}
@@ -725,6 +730,7 @@ function vReview(){
  return '<div class="chips" aria-label="Facturen">'+chips+'</div>'+
   '<div class="review"><div><div class="muted small" style="margin-bottom:6px">Factuur '+(S.cur+1)+' van '+S.invoices.length+' · origineel: '+esc(i.orig)+'</div><div class="desk"><div class="pagewrap">'+paper(i)+'</div></div></div>'+side+'</div>';
 }
+function payCopy(i){return i.pay===true&&(i.action==="private"||(i.action==="process"&&i.project==="Man&Meer algemeen"))}
 function planRows(){
  return S.invoices.map(function(i){
   var pr=projByName(i.project),acts=[];
@@ -735,6 +741,7 @@ function planRows(){
   if(i.action==="process")acts.push("Stempel op de pdf zetten ("+i.approvedOn+")");
   if(i.action==="reject"){acts.push("Stempel AFGEKEURD en de reden op de pdf zetten ("+i.approvedOn+")");acts.push("Mail aan "+(LIVE.on&&S.test?"jezelf (testmodus, anders "+i.rejectTo+")":i.rejectTo)+" met de afgekeurde pdf als bijlage en de reden in de mail; kopie komt in Verzonden items")}
   if(i.action==="process"&&(i.extra||[]).length)acts.push("Achter de factuur voegen: "+i.extra.map(extraName).join(", "));
+  if(payCopy(i))acts.push("Kopie in de map nog te betalen facturen zetten"+(S.test?" (testmodus)":""));
   var sendable=i.action==="process"&&i.send&&!i.own&&pr;
   if(sendable){acts.push(pr.email?"Mail aan "+pr.email+(LIVE.on&&ccList(i).length?" (cc "+ccList(i).join(", ")+")":(!LIVE.on&&S.cc?" (cc "+S.cc+")":""))+" met de pdf als bijlage; kopie komt in Verzonden items":"__noMail")}
   if(!destFolder(i))acts.push("__noFolder");
@@ -787,7 +794,7 @@ function vAdmin(){
   '<div class="field"><label for="p'+k+'f">Mapadres facturen</label><div class="pathrow"><input class="inp" id="p'+k+'f" data-p="'+k+'" data-pf="folder" value="'+esc(p.folder)+'" placeholder="nog niet ingevuld"><button class="btn" data-act="browse" data-v="'+k+':folder">Bladeren…</button></div></div>'+
   '<div class="field"><label for="p'+k+'m">Model (CAPEX)</label><div class="pathrow"><input class="inp" id="p'+k+'m" data-p="'+k+'" data-pf="model" value="'+esc(p.model)+'" placeholder="geen model"><button class="btn" data-act="browse" data-v="'+k+':model">Bladeren…</button></div></div></div>';
  }).join("");
- var sp=SPECIAL.concat([{name:"dubbel",note:"Facturen die al eerder verwerkt zijn"},{name:"afgekeurd",note:"Afgekeurde facturen (kopie van wat naar de leverancier ging)"}]).map(function(p,k){return '<div class="field"><label for="sp'+k+'">'+esc(p.name)+' <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· '+esc(p.note)+'</span></label><div class="pathrow"><input class="inp" id="sp'+k+'" data-sf="'+esc(p.name)+'" value="'+esc(S.special[p.name]||(p.name==="afgekeurd"?BASE+"afgekeurd":""))+'" placeholder="nog niet ingevuld"><button class="btn" data-act="browse" data-v="s:'+esc(p.name)+'">Bladeren…</button></div></div>'}).join("");
+ var sp=SPECIAL.concat([{name:"dubbel",note:"Facturen die al eerder verwerkt zijn"},{name:"afgekeurd",note:"Afgekeurde facturen (kopie van wat naar de leverancier ging)"},{name:"betalen",note:"Kopie van facturen die jij zelf nog moet betalen"}]).map(function(p,k){return '<div class="field"><label for="sp'+k+'">'+esc(p.name)+' <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· '+esc(p.note)+'</span></label><div class="pathrow"><input class="inp" id="sp'+k+'" data-sf="'+esc(p.name)+'" value="'+esc(S.special[p.name]||(p.name==="afgekeurd"?BASE+"afgekeurd":p.name==="betalen"?BASE+"nog te betalen facturen":""))+'" placeholder="nog niet ingevuld"><button class="btn" data-act="browse" data-v="s:'+esc(p.name)+'">Bladeren…</button></div></div>'}).join("");
  return '<div class="stack">'+
  '<div class="card"><div class="row" style="justify-content:space-between"><h2>Beheer</h2><span id="syncst">'+syncHtml()+'</span></div><p class="muted">Adressen worden onthouden en kun je hier altijd wijzigen. De e-mailadressen hieronder zijn voorbeelden.</p>'+
   '<div class="two"><div class="field"><label for="cc">Extra kopie naar (laat leeg)</label><input class="inp" id="cc" data-g="cc" type="email" value="'+esc(S.cc)+'" placeholder="geen"><span class="muted small">Elke mail staat vanzelf in je Verzonden items. Vul hier niets in: een kopie in je inbox laat je automatisering de factuur opnieuw oppakken.</span></div>'+
@@ -1275,6 +1282,12 @@ async function liveRun(){
     log("Hernoemen en verplaatsen…");
     await gfetch("PATCH","/me/drive/items/"+i.itemId,{name:name,parentReference:{id:target.id},"@microsoft.graph.conflictBehavior":"rename"});
    }
+   if(payCopy(i)){
+    log("Kopie voor nog te betalen facturen…");
+    var ppath=S.test?testRoot+"/nog te betalen facturen":S.special.betalen||(BASE+"nog te betalen facturen");
+    await ensureFolder(ppath);
+    await uploadTo(rp(ppath+"/"+name),bytes,"application/pdf");
+   }
    var merged=(i.extra||[]).filter(function(x){return x.kind==="box"});
    if(merged.length&&!S.test){
     try{var mf=await ensureFolder(S.boxin+"/_samengevoegd");
@@ -1283,7 +1296,7 @@ async function liveRun(){
     }catch(e2){row.status="gelukt, maar origineel van bijlage niet verplaatst: "+e2.message}
    }
    row.dest=tfolder;row.adm=!!(i.adm&&i.action==="process"&&p.acts.some(function(a){return /^Noteren/.test(a)}));row.ok=true;if(!row.status)row.status="gelukt";okSet[i.id]=1;
-   if(i.action!=="duplicate")dbRows.push([todayISO,i.orig,name,i.date,i.number,i.supplier,destOf(i),(S.test?"TEST via app; ":"via app; ")+"uit map box in"+(row.adm?"; administratie bijwerken: voorstel nodig":"")+(i.note&&i.action==="process"?"; extra tekst op factuur: "+i.note:"")+(i.action==="reject"?"; AFGEKEURD, reden: "+String(i.rejectReason||"").replace(/[\r\n]+/g," ")+"; teruggestuurd aan "+i.rejectTo:"")+((i.extra||[]).length?"; achter factuur gevoegd: "+i.extra.map(extraName).join(" + "):"")]);
+   if(i.action!=="duplicate")dbRows.push([todayISO,i.orig,name,i.date,i.number,i.supplier,destOf(i),(S.test?"TEST via app; ":"via app; ")+"uit map box in"+(row.adm?"; administratie bijwerken: voorstel nodig":"")+(payCopy(i)?"; door David te betalen (kopie in nog te betalen facturen)":"")+(i.note&&i.action==="process"?"; extra tekst op factuur: "+i.note:"")+(i.action==="reject"?"; AFGEKEURD, reden: "+String(i.rejectReason||"").replace(/[\r\n]+/g," ")+"; teruggestuurd aan "+i.rejectTo:"")+((i.extra||[]).length?"; achter factuur gevoegd: "+i.extra.map(extraName).join(" + "):"")]);
   }catch(e){
    row.status=mailSent?"Mail is verstuurd, maar bestand niet verplaatst: "+e.message:"MISLUKT, niet verwerkt: "+e.message;
   }
